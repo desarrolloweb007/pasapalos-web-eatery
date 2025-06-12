@@ -14,7 +14,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   allowedRoles = [],
   requireAuth = true,
 }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, userProfile, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   // If authentication is required but user is not authenticated
   if (requireAuth && !isAuthenticated) {
@@ -22,10 +30,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // If specific roles are required and user doesn't have the right role
-  if (allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
+  if (allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role_name!)) {
     // Redirect to appropriate dashboard based on user role
     const getDashboardRoute = () => {
-      switch (user.role) {
+      switch (userProfile.role_name) {
         case 'admin': return '/admin';
         case 'cajero': return '/cajero';
         case 'cocinero': return '/cocinero';

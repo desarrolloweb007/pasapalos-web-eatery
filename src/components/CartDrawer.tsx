@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -16,7 +18,8 @@ interface CartDrawerProps {
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({ open, onOpenChange }) => {
-  const { items, updateQuantity, removeItem, total, createOrder } = useCart();
+  const { items, updateQuantity, removeItem, total, clearCart } = useCart();
+  const { user, userProfile } = useAuth();
   const [customerName, setCustomerName] = useState('');
   const [isOrdering, setIsOrdering] = useState(false);
 
@@ -42,14 +45,54 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ open, onOpenChange }) =>
     setIsOrdering(true);
     
     try {
-      const order = createOrder(customerName);
+      // Crear el pedido en Supabase
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          customer_name: customerName,
+          user_id: user?.id || null,
+          total_price: total,
+          status: 'pendiente'
+        })
+        .select()
+        .single();
+
+      if (orderError) throw orderError;
+
+      // Crear los items del pedido
+      const orderItems = items.map(item => ({
+        order_id: order.id,
+        product_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.price * item.quantity
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) throw itemsError;
+
+      // Log de seguridad
+      if (user) {
+        await supabase.rpc('log_security_event', {
+          p_user_id: user.id,
+          p_action: 'pedido_creado',
+          p_description: `Pedido ${order.id} creado por valor de ${formatPrice(total)}`
+        });
+      }
+
       toast({
         title: "¡Pedido realizado!",
-        description: `Tu pedido #${order.id} ha sido enviado a cocina.`,
+        description: `Tu pedido ha sido enviado a cocina. Total: ${formatPrice(total)}`,
       });
+
+      clearCart();
       setCustomerName('');
       onOpenChange(false);
     } catch (error) {
+      console.error('Error creating order:', error);
       toast({
         title: "Error",
         description: "Hubo un problema al procesar tu pedido. Intenta de nuevo.",
@@ -61,10 +104,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ open, onOpenChange }) =>
   };
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-VE', {
+    return new Intl.NumberFormat('es-CO', {
       style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(price);
   };
 
@@ -153,8 +197,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ open, onOpenChange }) =>
                   <Label htmlFor="customerName">Nombre del cliente</Label>
                   <Input
                     id="customerName"
-                    placeholder="Ingresa tu nombre"
-                    value={customerName}
+                    placeholder={userProfile ? userProfile.full_name : "Ingresa tu nombre"}
+                    value={customerName || (userProfile ? userProfile.full_name : '')}
                     onChange={(e) => setCustomerName(e.target.value)}
                   />
                 </div>

@@ -12,18 +12,18 @@ import { CartDrawer } from './CartDrawer';
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, userProfile, logout, isAuthenticated, loading } = useAuth();
   const { itemCount } = useCart();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 
   const getDashboardRoute = () => {
-    if (!user) return '/';
-    switch (user.role) {
+    if (!userProfile) return '/';
+    switch (userProfile.role_name) {
       case 'admin': return '/admin';
       case 'cajero': return '/cajero';
       case 'cocinero': return '/cocinero';
@@ -32,6 +32,17 @@ export const Header = () => {
       default: return '/';
     }
   };
+
+  if (loading) {
+    return (
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="animate-pulse bg-muted h-8 w-48 rounded"></div>
+          <div className="animate-pulse bg-muted h-8 w-32 rounded"></div>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -54,7 +65,7 @@ export const Header = () => {
           <Link to="/menu" className="text-sm font-medium hover:text-primary transition-colors">
             Menú
           </Link>
-          {isAuthenticated && (
+          {isAuthenticated && userProfile && (
             <Link to={getDashboardRoute()} className="text-sm font-medium hover:text-primary transition-colors">
               Mi Panel
             </Link>
@@ -79,10 +90,10 @@ export const Header = () => {
           </Button>
 
           {/* Auth Buttons */}
-          {isAuthenticated ? (
+          {isAuthenticated && userProfile ? (
             <div className="hidden md:flex items-center space-x-2">
               <span className="text-sm text-muted-foreground">
-                Hola, {user?.name}
+                Hola, {userProfile.full_name}
               </span>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="h-4 w-4 mr-2" />
@@ -124,7 +135,7 @@ export const Header = () => {
                 >
                   Menú
                 </Link>
-                {isAuthenticated ? (
+                {isAuthenticated && userProfile ? (
                   <>
                     <Link
                       to={getDashboardRoute()}
@@ -135,7 +146,7 @@ export const Header = () => {
                     </Link>
                     <div className="pt-4 border-t">
                       <p className="text-sm text-muted-foreground mb-2">
-                        Conectado como: {user?.name}
+                        Conectado como: {userProfile.full_name}
                       </p>
                       <Button
                         variant="outline"

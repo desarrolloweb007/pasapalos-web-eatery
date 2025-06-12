@@ -1,23 +1,12 @@
+import React, { createContext, useContext, useState } from 'react';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-export interface CartItem {
+interface CartItem {
   id: string;
   name: string;
   price: number;
   quantity: number;
   description: string;
-  image?: string;
-}
-
-export interface Order {
-  id: string;
-  items: CartItem[];
-  total: number;
-  customerName: string;
-  status: 'pendiente' | 'recibido' | 'en espera' | 'cocinado' | 'pendiente de entrega' | 'entregado';
-  createdAt: Date;
-  updatedAt: Date;
+  image: string;
 }
 
 interface CartContextType {
@@ -28,7 +17,6 @@ interface CartContextType {
   clearCart: () => void;
   total: number;
   itemCount: number;
-  createOrder: (customerName: string) => Order;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -44,29 +32,15 @@ export const useCart = () => {
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  useEffect(() => {
-    const savedCart = localStorage.getItem('cart');
-    if (savedCart) {
-      setItems(JSON.parse(savedCart));
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items));
-  }, [items]);
-
-  const addItem = (newItem: Omit<CartItem, 'quantity'>) => {
+  const addItem = (item: Omit<CartItem, 'quantity'>) => {
     setItems(currentItems => {
-      const existingItem = currentItems.find(item => item.id === newItem.id);
+      const existingItem = currentItems.find(i => i.id === item.id);
       if (existingItem) {
-        return currentItems.map(item =>
-          item.id === newItem.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+        return currentItems.map(i =>
+          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
         );
-      } else {
-        return [...currentItems, { ...newItem, quantity: 1 }];
       }
+      return [...currentItems, { ...item, quantity: 1 }];
     });
   };
 
@@ -88,31 +62,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearCart = () => {
     setItems([]);
-    localStorage.removeItem('cart');
   };
 
   const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-
-  const createOrder = (customerName: string): Order => {
-    const order: Order = {
-      id: Date.now().toString(),
-      items: [...items],
-      total,
-      customerName,
-      status: 'pendiente',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    // Save order to localStorage (in real app this would be sent to backend)
-    const existingOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-    existingOrders.push(order);
-    localStorage.setItem('orders', JSON.stringify(existingOrders));
-
-    clearCart();
-    return order;
-  };
 
   const value = {
     items,
@@ -122,7 +75,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     clearCart,
     total,
     itemCount,
-    createOrder,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
