@@ -35,12 +35,14 @@ interface UserProfile {
   };
 }
 
+type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
+
 interface DatabaseOrder {
   id: string;
   customer_name: string;
   user_id: string | null;
   total_price: number;
-  status: 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
+  status: OrderStatus;
   notes: string | null;
   created_at: string;
   order_items: {
@@ -94,7 +96,14 @@ const AdminDashboard = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setOrders(data || []);
+      
+      // Cast the status to the correct type
+      const typedOrders = (data || []).map(order => ({
+        ...order,
+        status: order.status as OrderStatus
+      }));
+      
+      setOrders(typedOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
     }
@@ -247,7 +256,7 @@ const AdminDashboard = () => {
     }).format(price);
   };
 
-  const getStatusBadgeVariant = (status: DatabaseOrder['status']) => {
+  const getStatusBadgeVariant = (status: OrderStatus) => {
     switch (status) {
       case 'pendiente': return 'destructive';
       case 'recibido': return 'secondary';
