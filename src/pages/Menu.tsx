@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCart } from '@/context/CartContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Star, Plus, Loader2 } from 'lucide-react';
+import { Search, Plus, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 interface Product {
@@ -52,7 +52,13 @@ const Menu = () => {
 
       if (error) throw error;
 
-      setProducts(data || []);
+      // Type assertion to ensure proper category types
+      const typedProducts = (data || []).map(product => ({
+        ...product,
+        category: product.category as 'comida_rapida' | 'especial' | 'extra' | 'bebida'
+      }));
+
+      setProducts(typedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
       toast({
@@ -99,7 +105,8 @@ const Menu = () => {
   const getImageUrl = (imageUrl: string | null) => {
     if (!imageUrl) return '/placeholder.svg';
     if (imageUrl.startsWith('http')) return imageUrl;
-    return `${supabase.supabaseUrl}/storage/v1/object/public/product-images/${imageUrl}`;
+    // Use the proper Supabase URL construction
+    return `https://gezrpaubecdueuewdltq.supabase.co/storage/v1/object/public/product-images/${imageUrl}`;
   };
 
   if (loading) {

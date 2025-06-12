@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState } from 'react';
 
 interface CartItem {
@@ -7,6 +8,17 @@ interface CartItem {
   quantity: number;
   description: string;
   image: string;
+}
+
+export interface Order {
+  id: string;
+  customerName: string;
+  items: CartItem[];
+  total: number;
+  status: 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
+  createdAt: string;
+  userId?: string;
+  notes?: string;
 }
 
 interface CartContextType {
