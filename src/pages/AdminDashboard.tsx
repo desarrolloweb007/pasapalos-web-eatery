@@ -13,6 +13,7 @@ import { useAuth, UserRole } from '@/context/AuthContext';
 import { Order } from '@/context/CartContext';
 import { Plus, Users, Package, ShoppingBag, Edit, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Product {
   id: string;
@@ -21,21 +22,43 @@ interface Product {
   description: string;
   ingredients: string[];
   category: string;
-  image?: string;
+  image_url?: string;
+  is_active: boolean;
 }
 
-interface User {
+interface UserProfile {
   id: string;
-  name: string;
-  email: string;
-  role: UserRole;
+  full_name: string;
+  role_id: number;
+  roles?: {
+    name: string;
+  };
+}
+
+interface DatabaseOrder {
+  id: string;
+  customer_name: string;
+  user_id: string | null;
+  total_price: number;
+  status: 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
+  notes: string | null;
+  created_at: string;
+  order_items: {
+    id: string;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    products: {
+      name: string;
+    };
+  }[];
 }
 
 const AdminDashboard = () => {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<DatabaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [activeTab, setActiveTab] = useState('overview');
 
   // Product form state
@@ -49,17 +72,68 @@ const AdminDashboard = () => {
   });
 
   useEffect(() => {
-    // Load data from localStorage (in real app, this would be API calls)
-    const savedOrders = JSON.parse(localStorage.getItem('orders') || '[]');
-    const savedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    const savedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    
-    setOrders(savedOrders);
-    setProducts(savedProducts);
-    setUsers(savedUsers);
+    fetchOrders();
+    fetchProducts();
+    fetchUsers();
   }, []);
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const fetchOrders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            quantity,
+            unit_price,
+            total_price,
+            products (name)
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          full_name,
+          role_id,
+          roles (name)
+        `)
+        .order('full_name');
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!productForm.name || !productForm.price || !productForm.description || !productForm.category) {
@@ -71,75 +145,115 @@ const AdminDashboard = () => {
       return;
     }
 
-    const newProduct: Product = {
-      id: Date.now().toString(),
-      name: productForm.name,
-      price: parseFloat(productForm.price),
-      description: productForm.description,
-      ingredients: productForm.ingredients.split(',').map(ing => ing.trim()),
-      category: productForm.category,
-      image: '/placeholder.svg', // In real app, would handle file upload
-    };
+    try {
+      const newProduct = {
+        name: productForm.name,
+        price: parseFloat(productForm.price),
+        description: productForm.description,
+        ingredients: productForm.ingredients.split(',').map(ing => ing.trim()),
+        category: productForm.category,
+        created_by: user?.id,
+      };
 
-    const updatedProducts = [...products, newProduct];
-    setProducts(updatedProducts);
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
+      const { error } = await supabase
+        .from('products')
+        .insert([newProduct]);
 
-    // Reset form
-    setProductForm({
-      name: '',
-      price: '',
-      description: '',
-      ingredients: '',
-      category: '',
-      image: null,
-    });
+      if (error) throw error;
 
-    toast({
-      title: "Producto creado",
-      description: `${newProduct.name} ha sido agregado al menú.`,
-    });
+      // Reset form
+      setProductForm({
+        name: '',
+        price: '',
+        description: '',
+        ingredients: '',
+        category: '',
+        image: null,
+      });
+
+      // Refresh products
+      await fetchProducts();
+
+      toast({
+        title: "Producto creado",
+        description: `${newProduct.name} ha sido agregado al menú.`,
+      });
+    } catch (error) {
+      console.error('Error creating product:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo crear el producto.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    const updatedProducts = products.filter(p => p.id !== productId);
-    setProducts(updatedProducts);
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
-    
-    toast({
-      title: "Producto eliminado",
-      description: "El producto ha sido eliminado del menú.",
-    });
+  const handleDeleteProduct = async (productId: string) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: false })
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      await fetchProducts();
+      
+      toast({
+        title: "Producto eliminado",
+        description: "El producto ha sido eliminado del menú.",
+      });
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el producto.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleChangeUserRole = (userId: string, newRole: UserRole) => {
-    const updatedUsers = users.map(u => 
-      u.id === userId ? { ...u, role: newRole } : u
-    );
-    setUsers(updatedUsers);
-    localStorage.setItem('users', JSON.stringify(updatedUsers));
-    
-    toast({
-      title: "Rol actualizado",
-      description: "El rol del usuario ha sido actualizado correctamente.",
-    });
+  const handleChangeUserRole = async (userId: string, newRoleId: number) => {
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ role_id: newRoleId })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      await fetchUsers();
+      
+      toast({
+        title: "Rol actualizado",
+        description: "El rol del usuario ha sido actualizado correctamente.",
+      });
+    } catch (error) {
+      console.error('Error updating user role:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el rol del usuario.",
+        variant: "destructive",
+      });
+    }
   };
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-VE', {
+    return new Intl.NumberFormat('es-CO', {
       style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
+      currency: 'COP',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(price);
   };
 
-  const getStatusBadgeVariant = (status: Order['status']) => {
+  const getStatusBadgeVariant = (status: DatabaseOrder['status']) => {
     switch (status) {
       case 'pendiente': return 'destructive';
       case 'recibido': return 'secondary';
-      case 'en espera': return 'default';
-      case 'cocinado': return 'default';
-      case 'pendiente de entrega': return 'secondary';
+      case 'en_espera': return 'default';
+      case 'cocinando': return 'default';
+      case 'pendiente_entrega': return 'secondary';
       case 'entregado': return 'default';
       default: return 'secondary';
     }
@@ -152,7 +266,7 @@ const AdminDashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Panel de Administrador</h1>
-          <p className="text-muted-foreground">Bienvenido, {user?.name}</p>
+          <p className="text-muted-foreground">Bienvenido, {user?.user_metadata?.full_name || 'Administrador'}</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -181,7 +295,7 @@ const AdminDashboard = () => {
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{products.length}</div>
+                  <div className="text-2xl font-bold">{products.filter(p => p.is_active).length}</div>
                 </CardContent>
               </Card>
               <Card>
@@ -200,7 +314,7 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {formatPrice(orders.reduce((sum, order) => sum + order.total, 0))}
+                    {formatPrice(orders.reduce((sum, order) => sum + order.total_price, 0))}
                   </div>
                 </CardContent>
               </Card>
@@ -234,14 +348,14 @@ const AdminDashboard = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="product-price">Precio (USD)</Label>
+                      <Label htmlFor="product-price">Precio (COP)</Label>
                       <Input
                         id="product-price"
                         type="number"
-                        step="0.01"
+                        step="100"
                         value={productForm.price}
                         onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                        placeholder="0.00"
+                        placeholder="0"
                         required
                       />
                     </div>
@@ -271,10 +385,10 @@ const AdminDashboard = () => {
                           <SelectValue placeholder="Selecciona una categoría" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="comidas-rapidas">Comidas Rápidas</SelectItem>
-                          <SelectItem value="especiales">Especiales</SelectItem>
-                          <SelectItem value="extras">Extras</SelectItem>
-                          <SelectItem value="bebidas">Bebidas</SelectItem>
+                          <SelectItem value="comida_rapida">Comidas Rápidas</SelectItem>
+                          <SelectItem value="especial">Especiales</SelectItem>
+                          <SelectItem value="extra">Extras</SelectItem>
+                          <SelectItem value="bebida">Bebidas</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -295,7 +409,7 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {products.map((product) => (
+                    {products.filter(p => p.is_active).map((product) => (
                       <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
                         <div className="flex-1">
                           <h4 className="font-medium">{product.name}</h4>
@@ -340,10 +454,10 @@ const AdminDashboard = () => {
                     <div key={order.id} className="border rounded-lg p-4">
                       <div className="flex justify-between items-start mb-3">
                         <div>
-                          <h4 className="font-medium">Pedido #{order.id}</h4>
-                          <p className="text-sm text-muted-foreground">Cliente: {order.customerName}</p>
+                          <h4 className="font-medium">Pedido #{order.id.slice(0, 8)}</h4>
+                          <p className="text-sm text-muted-foreground">Cliente: {order.customer_name}</p>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(order.createdAt).toLocaleString('es-VE')}
+                            {new Date(order.created_at).toLocaleString('es-CO')}
                           </p>
                         </div>
                         <div className="text-right">
@@ -351,19 +465,25 @@ const AdminDashboard = () => {
                             {order.status}
                           </Badge>
                           <p className="text-lg font-bold text-primary mt-1">
-                            {formatPrice(order.total)}
+                            {formatPrice(order.total_price)}
                           </p>
                         </div>
                       </div>
                       <div className="space-y-2">
                         <p className="text-sm font-medium">Productos:</p>
-                        {order.items.map((item, index) => (
+                        {order.order_items.map((item, index) => (
                           <div key={index} className="text-sm text-muted-foreground flex justify-between">
-                            <span>{item.quantity}x {item.name}</span>
-                            <span>{formatPrice(item.price * item.quantity)}</span>
+                            <span>{item.quantity}x {item.products.name}</span>
+                            <span>{formatPrice(item.total_price)}</span>
                           </div>
                         ))}
                       </div>
+                      {order.notes && (
+                        <div className="mt-3 pt-3 border-t">
+                          <p className="text-sm font-medium">Notas:</p>
+                          <p className="text-sm text-muted-foreground">{order.notes}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                   {orders.length === 0 && (
@@ -390,26 +510,26 @@ const AdminDashboard = () => {
                   {users.map((userItem) => (
                     <div key={userItem.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div>
-                        <h4 className="font-medium">{userItem.name}</h4>
-                        <p className="text-sm text-muted-foreground">{userItem.email}</p>
+                        <h4 className="font-medium">{userItem.full_name}</h4>
+                        <p className="text-sm text-muted-foreground">ID: {userItem.id}</p>
                       </div>
                       <div className="flex items-center gap-4">
-                        <Badge variant={userItem.role === 'admin' ? 'default' : 'secondary'}>
-                          {userItem.role}
+                        <Badge variant={userItem.role_id === 1 ? 'default' : 'secondary'}>
+                          {userItem.roles?.name || 'usuario'}
                         </Badge>
                         <Select
-                          value={userItem.role}
-                          onValueChange={(newRole) => handleChangeUserRole(userItem.id, newRole as UserRole)}
+                          value={userItem.role_id.toString()}
+                          onValueChange={(newRoleId) => handleChangeUserRole(userItem.id, parseInt(newRoleId))}
                         >
                           <SelectTrigger className="w-40">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="usuario">Usuario</SelectItem>
-                            <SelectItem value="mesero">Mesero</SelectItem>
-                            <SelectItem value="cocinero">Cocinero</SelectItem>
-                            <SelectItem value="cajero">Cajero</SelectItem>
-                            <SelectItem value="admin">Administrador</SelectItem>
+                            <SelectItem value="5">Usuario</SelectItem>
+                            <SelectItem value="4">Mesero</SelectItem>
+                            <SelectItem value="3">Cocinero</SelectItem>
+                            <SelectItem value="2">Cajero</SelectItem>
+                            <SelectItem value="1">Admin</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
