@@ -10,8 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth, UserRole } from '@/context/AuthContext';
-import { Order } from '@/context/CartContext';
-import { Plus, Users, Package, ShoppingBag, Edit, Trash2 } from 'lucide-react';
+import { Plus, Users, Package, ShoppingBag, Edit, Trash2, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -57,11 +56,13 @@ interface DatabaseOrder {
 }
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<DatabaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Product form state
   const [productForm, setProductForm] = useState({
@@ -74,13 +75,34 @@ const AdminDashboard = () => {
   });
 
   useEffect(() => {
-    fetchOrders();
-    fetchProducts();
-    fetchUsers();
-  }, []);
+    if (!authLoading && user) {
+      initializeData();
+    }
+  }, [authLoading, user]);
+
+  const initializeData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchOrders(),
+        fetchProducts(),
+        fetchUsers()
+      ]);
+    } catch (error) {
+      console.error('Error initializing dashboard data:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar los datos del dashboard.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
+      console.log('Fetching orders...');
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -95,7 +117,10 @@ const AdminDashboard = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching orders:', error);
+        throw error;
+      }
       
       // Cast the status to the correct type
       const typedOrders = (data || []).map(order => ({
@@ -103,28 +128,38 @@ const AdminDashboard = () => {
         status: order.status as OrderStatus
       }));
       
+      console.log('Orders fetched successfully:', typedOrders.length);
       setOrders(typedOrders);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      setOrders([]);
     }
   };
 
   const fetchProducts = async () => {
     try {
+      console.log('Fetching products...');
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching products:', error);
+        throw error;
+      }
+      
+      console.log('Products fetched successfully:', data?.length || 0);
       setProducts(data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
+      setProducts([]);
     }
   };
 
   const fetchUsers = async () => {
     try {
+      console.log('Fetching users...');
       const { data, error } = await supabase
         .from('user_profiles')
         .select(`
@@ -135,10 +170,16 @@ const AdminDashboard = () => {
         `)
         .order('full_name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
+      
+      console.log('Users fetched successfully:', data?.length || 0);
       setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setUsers([]);
     }
   };
 
@@ -154,21 +195,37 @@ const AdminDashboard = () => {
       return;
     }
 
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "Usuario no autenticado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const newProduct = {
-        name: productForm.name,
+        name: productForm.name.trim(),
         price: parseFloat(productForm.price),
-        description: productForm.description,
-        ingredients: productForm.ingredients.split(',').map(ing => ing.trim()),
+        description: productForm.description.trim(),
+        ingredients: productForm.ingredients ? productForm.ingredients.split(',').map(ing => ing.trim()).filter(ing => ing.length > 0) : [],
         category: productForm.category,
-        created_by: user?.id,
+        created_by: user.id,
+        is_active: true,
       };
+
+      console.log('Creating product:', newProduct);
 
       const { error } = await supabase
         .from('products')
         .insert([newProduct]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating product:', error);
+        throw error;
+      }
 
       // Reset form
       setProductForm({
@@ -191,20 +248,28 @@ const AdminDashboard = () => {
       console.error('Error creating product:', error);
       toast({
         title: "Error",
-        description: "No se pudo crear el producto.",
+        description: "No se pudo crear el producto. Intenta de nuevo.",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteProduct = async (productId: string) => {
+    if (!productId) return;
+
     try {
+      console.log('Deleting product:', productId);
       const { error } = await supabase
         .from('products')
         .update({ is_active: false })
         .eq('id', productId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting product:', error);
+        throw error;
+      }
 
       await fetchProducts();
       
@@ -223,13 +288,19 @@ const AdminDashboard = () => {
   };
 
   const handleChangeUserRole = async (userId: string, newRoleId: number) => {
+    if (!userId || !newRoleId) return;
+
     try {
+      console.log('Changing user role:', userId, newRoleId);
       const { error } = await supabase
         .from('user_profiles')
         .update({ role_id: newRoleId })
         .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating user role:', error);
+        throw error;
+      }
 
       await fetchUsers();
       
@@ -248,6 +319,7 @@ const AdminDashboard = () => {
   };
 
   const formatPrice = (price: number) => {
+    if (typeof price !== 'number' || isNaN(price)) return '$0';
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -268,6 +340,29 @@ const AdminDashboard = () => {
     }
   };
 
+  const getUserDisplayName = () => {
+    if (userProfile?.full_name) return userProfile.full_name;
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
+    if (user?.email) return user.email;
+    return 'Administrador';
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center min-h-96">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span>Cargando dashboard...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -275,7 +370,7 @@ const AdminDashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Panel de Administrador</h1>
-          <p className="text-muted-foreground">Bienvenido, {user?.user_metadata?.full_name || 'Administrador'}</p>
+          <p className="text-muted-foreground">Bienvenido, {getUserDisplayName()}</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -323,7 +418,7 @@ const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {formatPrice(orders.reduce((sum, order) => sum + order.total_price, 0))}
+                    {formatPrice(orders.reduce((sum, order) => sum + (order.total_price || 0), 0))}
                   </div>
                 </CardContent>
               </Card>
@@ -347,35 +442,39 @@ const AdminDashboard = () => {
                 <CardContent>
                   <form onSubmit={handleCreateProduct} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="product-name">Nombre del producto</Label>
+                      <Label htmlFor="product-name">Nombre del producto *</Label>
                       <Input
                         id="product-name"
                         value={productForm.name}
                         onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                         placeholder="Ej: Arepa Reina Pepiada"
                         required
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="product-price">Precio (COP)</Label>
+                      <Label htmlFor="product-price">Precio (COP) *</Label>
                       <Input
                         id="product-price"
                         type="number"
                         step="100"
+                        min="0"
                         value={productForm.price}
                         onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
                         placeholder="0"
                         required
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="product-description">Descripción</Label>
+                      <Label htmlFor="product-description">Descripción *</Label>
                       <Textarea
                         id="product-description"
                         value={productForm.description}
                         onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                         placeholder="Describe el producto..."
                         required
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div className="space-y-2">
@@ -385,11 +484,16 @@ const AdminDashboard = () => {
                         value={productForm.ingredients}
                         onChange={(e) => setProductForm({ ...productForm, ingredients: e.target.value })}
                         placeholder="Pollo, Aguacate, Mayonesa"
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="product-category">Categoría</Label>
-                      <Select value={productForm.category} onValueChange={(value) => setProductForm({ ...productForm, category: value })}>
+                      <Label htmlFor="product-category">Categoría *</Label>
+                      <Select 
+                        value={productForm.category} 
+                        onValueChange={(value) => setProductForm({ ...productForm, category: value })}
+                        disabled={isSubmitting}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona una categoría" />
                         </SelectTrigger>
@@ -401,8 +505,15 @@ const AdminDashboard = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button type="submit" className="w-full">
-                      Crear Producto
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Creando...
+                        </>
+                      ) : (
+                        'Crear Producto'
+                      )}
                     </Button>
                   </form>
                 </CardContent>
@@ -413,35 +524,41 @@ const AdminDashboard = () => {
                 <CardHeader>
                   <CardTitle>Productos Existentes</CardTitle>
                   <CardDescription>
-                    Gestiona los productos del menú
+                    Gestiona los productos del menú ({products.filter(p => p.is_active).length} activos)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {products.filter(p => p.is_active).map((product) => (
-                      <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex-1">
-                          <h4 className="font-medium">{product.name}</h4>
-                          <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
-                          <Badge variant="secondary" className="mt-1">
-                            {product.category}
-                          </Badge>
+                    {products.filter(p => p.is_active).length > 0 ? (
+                      products.filter(p => p.is_active).map((product) => (
+                        <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex-1">
+                            <h4 className="font-medium">{product.name}</h4>
+                            <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
+                            <Badge variant="secondary" className="mt-1">
+                              {product.category}
+                            </Badge>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => handleDeleteProduct(product.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No hay productos activos.</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -454,48 +571,53 @@ const AdminDashboard = () => {
               <CardHeader>
                 <CardTitle>Todos los Pedidos</CardTitle>
                 <CardDescription>
-                  Visualiza todos los pedidos realizados en la plataforma
+                  Visualiza todos los pedidos realizados en la plataforma ({orders.length} total)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {orders.map((order) => (
-                    <div key={order.id} className="border rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h4 className="font-medium">Pedido #{order.id.slice(0, 8)}</h4>
-                          <p className="text-sm text-muted-foreground">Cliente: {order.customer_name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(order.created_at).toLocaleString('es-CO')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant={getStatusBadgeVariant(order.status)}>
-                            {order.status}
-                          </Badge>
-                          <p className="text-lg font-bold text-primary mt-1">
-                            {formatPrice(order.total_price)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium">Productos:</p>
-                        {order.order_items.map((item, index) => (
-                          <div key={index} className="text-sm text-muted-foreground flex justify-between">
-                            <span>{item.quantity}x {item.products.name}</span>
-                            <span>{formatPrice(item.total_price)}</span>
+                  {orders.length > 0 ? (
+                    orders.map((order) => (
+                      <div key={order.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h4 className="font-medium">Pedido #{order.id.slice(0, 8)}</h4>
+                            <p className="text-sm text-muted-foreground">Cliente: {order.customer_name}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(order.created_at).toLocaleString('es-CO')}
+                            </p>
                           </div>
-                        ))}
-                      </div>
-                      {order.notes && (
-                        <div className="mt-3 pt-3 border-t">
-                          <p className="text-sm font-medium">Notas:</p>
-                          <p className="text-sm text-muted-foreground">{order.notes}</p>
+                          <div className="text-right">
+                            <Badge variant={getStatusBadgeVariant(order.status)}>
+                              {order.status}
+                            </Badge>
+                            <p className="text-lg font-bold text-primary mt-1">
+                              {formatPrice(order.total_price)}
+                            </p>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                  {orders.length === 0 && (
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Productos:</p>
+                          {order.order_items && order.order_items.length > 0 ? (
+                            order.order_items.map((item, index) => (
+                              <div key={index} className="text-sm text-muted-foreground flex justify-between">
+                                <span>{item.quantity}x {item.products?.name || 'Producto desconocido'}</span>
+                                <span>{formatPrice(item.total_price)}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No hay items en este pedido</p>
+                          )}
+                        </div>
+                        {order.notes && (
+                          <div className="mt-3 pt-3 border-t">
+                            <p className="text-sm font-medium">Notas:</p>
+                            <p className="text-sm text-muted-foreground">{order.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">No hay pedidos registrados.</p>
                     </div>
@@ -511,40 +633,41 @@ const AdminDashboard = () => {
               <CardHeader>
                 <CardTitle>Gestión de Usuarios</CardTitle>
                 <CardDescription>
-                  Administra los usuarios registrados y sus roles
+                  Administra los usuarios registrados y sus roles ({users.length} total)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {users.map((userItem) => (
-                    <div key={userItem.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <h4 className="font-medium">{userItem.full_name}</h4>
-                        <p className="text-sm text-muted-foreground">ID: {userItem.id}</p>
+                  {users.length > 0 ? (
+                    users.map((userItem) => (
+                      <div key={userItem.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h4 className="font-medium">{userItem.full_name}</h4>
+                          <p className="text-sm text-muted-foreground">ID: {userItem.id.slice(0, 8)}...</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Badge variant={userItem.role_id === 1 ? 'default' : 'secondary'}>
+                            {userItem.roles?.name || 'usuario'}
+                          </Badge>
+                          <Select
+                            value={userItem.role_id.toString()}
+                            onValueChange={(newRoleId) => handleChangeUserRole(userItem.id, parseInt(newRoleId))}
+                          >
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="5">Usuario</SelectItem>
+                              <SelectItem value="4">Mesero</SelectItem>
+                              <SelectItem value="3">Cocinero</SelectItem>
+                              <SelectItem value="2">Cajero</SelectItem>
+                              <SelectItem value="1">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <Badge variant={userItem.role_id === 1 ? 'default' : 'secondary'}>
-                          {userItem.roles?.name || 'usuario'}
-                        </Badge>
-                        <Select
-                          value={userItem.role_id.toString()}
-                          onValueChange={(newRoleId) => handleChangeUserRole(userItem.id, parseInt(newRoleId))}
-                        >
-                          <SelectTrigger className="w-40">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="5">Usuario</SelectItem>
-                            <SelectItem value="4">Mesero</SelectItem>
-                            <SelectItem value="3">Cocinero</SelectItem>
-                            <SelectItem value="2">Cajero</SelectItem>
-                            <SelectItem value="1">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  ))}
-                  {users.length === 0 && (
+                    ))
+                  ) : (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">No hay usuarios registrados.</p>
                     </div>
