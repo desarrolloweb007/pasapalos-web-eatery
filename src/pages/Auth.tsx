@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,24 +9,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Auth = () => {
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const { login, register } = useAuth();
   const navigate = useNavigate();
-
-  // Login form state
-  const [loginData, setLoginData] = useState({
+  const { login, register, isAuthenticated, loading: authLoading, userProfile } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [loginForm, setLoginForm] = useState({
     email: '',
     password: '',
   });
-
-  // Register form state
-  const [registerData, setRegisterData] = useState({
+  const [registerForm, setRegisterForm] = useState({
     name: '',
     email: '',
     password: '',
@@ -34,107 +28,141 @@ const Auth = () => {
     acceptTerms: false,
   });
 
+  useEffect(() => {
+    if (isAuthenticated && userProfile) {
+      const getDashboardRoute = () => {
+        switch (userProfile.role_name) {
+          case 'admin': return '/admin';
+          case 'cajero': return '/cajero';
+          case 'cocinero': return '/cocinero';
+          case 'mesero': return '/mesero';
+          case 'usuario': return '/usuario';
+          default: return '/';
+        }
+      };
+      navigate(getDashboardRoute());
+    }
+  }, [isAuthenticated, userProfile, navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    
+    if (!loginForm.email || !loginForm.password) {
+      toast({
+        title: "Error",
+        description: "Por favor completa todos los campos.",
+        variant: "destructive",
+      });
+      return;
+    }
 
+    setLoading(true);
     try {
-      const success = await login(loginData.email, loginData.password);
-      if (success) {
+      const success = await login(loginForm.email, loginForm.password);
+      if (!success) {
         toast({
-          title: "¡Bienvenido!",
-          description: "Has iniciado sesión correctamente.",
-        });
-        navigate('/');
-      } else {
-        toast({
-          title: "Error de inicio de sesión",
+          title: "Error de autenticación",
           description: "Email o contraseña incorrectos.",
           variant: "destructive",
         });
       }
     } catch (error) {
+      console.error('Login error:', error);
       toast({
         title: "Error",
-        description: "Hubo un problema al iniciar sesión.",
+        description: "Ocurrió un error al iniciar sesión. Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    
+    if (!registerForm.name || !registerForm.email || !registerForm.password || !registerForm.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Por favor completa todos los campos.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (registerData.password !== registerData.confirmPassword) {
+    if (registerForm.password !== registerForm.confirmPassword) {
       toast({
         title: "Error",
         description: "Las contraseñas no coinciden.",
         variant: "destructive",
       });
-      setIsLoading(false);
       return;
     }
 
-    if (!registerData.acceptTerms) {
+    if (!registerForm.acceptTerms) {
       toast({
         title: "Error",
         description: "Debes aceptar los términos y condiciones.",
         variant: "destructive",
       });
-      setIsLoading(false);
       return;
     }
 
+    setLoading(true);
     try {
-      const success = await register(registerData);
+      const success = await register(registerForm);
       if (success) {
         toast({
-          title: "¡Registro exitoso!",
+          title: "Registro exitoso",
           description: "Tu cuenta ha sido creada correctamente.",
         });
-        navigate('/');
       } else {
         toast({
           title: "Error de registro",
-          description: "Hubo un problema al crear tu cuenta.",
+          description: "No se pudo crear la cuenta. Intenta de nuevo.",
           variant: "destructive",
         });
       }
     } catch (error) {
+      console.error('Register error:', error);
       toast({
         title: "Error",
-        description: "Hubo un problema al registrarte.",
+        description: "Ocurrió un error al registrarse. Intenta de nuevo.",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Cargando...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-warm flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-primary/20 via-background to-secondary/20 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 text-primary hover:text-primary/80 mb-4">
+        <div className="mb-8 text-center">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
             <ArrowLeft className="h-4 w-4" />
             Volver al inicio
           </Link>
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-yellow flex items-center justify-center">
-            <span className="text-2xl font-bold text-primary-foreground">C</span>
-          </div>
-          <h1 className="text-2xl font-bold text-primary">Casa de los Pasapalos</h1>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Acceder a tu cuenta</CardTitle>
-            <CardDescription>
-              Inicia sesión o crea una nueva cuenta
-            </CardDescription>
+          <CardHeader className="text-center">
+            <div className="w-16 h-16 rounded-full bg-gradient-yellow mx-auto mb-4 flex items-center justify-center">
+              <span className="text-2xl font-bold text-primary-foreground">C</span>
+            </div>
+            <CardTitle className="text-2xl">Casa de los Pasapalos</CardTitle>
+            <CardDescription>Accede a tu cuenta o regístrate</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
@@ -142,8 +170,7 @@ const Auth = () => {
                 <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
                 <TabsTrigger value="register">Registrarse</TabsTrigger>
               </TabsList>
-
-              {/* Login Tab */}
+              
               <TabsContent value="login">
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
@@ -151,53 +178,38 @@ const Auth = () => {
                     <Input
                       id="login-email"
                       type="email"
+                      value={loginForm.email}
+                      onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
                       placeholder="tu@email.com"
-                      value={loginData.email}
-                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Contraseña</Label>
-                    <div className="relative">
-                      <Input
-                        id="login-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={loginData.password}
-                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
+                    <Input
+                      id="login-password"
+                      type="password"
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                      placeholder="Tu contraseña"
+                      required
+                      disabled={loading}
+                    />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Iniciando sesión...
+                      </>
+                    ) : (
+                      'Iniciar Sesión'
+                    )}
                   </Button>
                 </form>
-
-                {/* Demo credentials */}
-                <div className="mt-6 p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-2">Credenciales de demo:</p>
-                  <div className="text-xs space-y-1">
-                    <p><strong>Admin:</strong> admin@casa.com / 123456</p>
-                    <p><strong>Cajero:</strong> cajero@casa.com / 123456</p>
-                    <p><strong>Cocinero:</strong> cocinero@casa.com / 123456</p>
-                    <p><strong>Mesero:</strong> mesero@casa.com / 123456</p>
-                    <p><strong>Usuario:</strong> usuario@casa.com / 123456</p>
-                  </div>
-                </div>
               </TabsContent>
-
-              {/* Register Tab */}
+              
               <TabsContent value="register">
                 <form onSubmit={handleRegister} className="space-y-4">
                   <div className="space-y-2">
@@ -205,10 +217,11 @@ const Auth = () => {
                     <Input
                       id="register-name"
                       type="text"
+                      value={registerForm.name}
+                      onChange={(e) => setRegisterForm({ ...registerForm, name: e.target.value })}
                       placeholder="Tu nombre completo"
-                      value={registerData.name}
-                      onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -216,68 +229,57 @@ const Auth = () => {
                     <Input
                       id="register-email"
                       type="email"
+                      value={registerForm.email}
+                      onChange={(e) => setRegisterForm({ ...registerForm, email: e.target.value })}
                       placeholder="tu@email.com"
-                      value={registerData.email}
-                      onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
                       required
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="register-password">Contraseña</Label>
-                    <div className="relative">
-                      <Input
-                        id="register-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={registerData.password}
-                        onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
+                    <Input
+                      id="register-password"
+                      type="password"
+                      value={registerForm.password}
+                      onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
+                      placeholder="Tu contraseña"
+                      required
+                      disabled={loading}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="register-confirm-password">Confirmar contraseña</Label>
-                    <div className="relative">
-                      <Input
-                        id="register-confirm-password"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={registerData.confirmPassword}
-                        onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
+                    <Input
+                      id="register-confirm-password"
+                      type="password"
+                      value={registerForm.confirmPassword}
+                      onChange={(e) => setRegisterForm({ ...registerForm, confirmPassword: e.target.value })}
+                      placeholder="Confirma tu contraseña"
+                      required
+                      disabled={loading}
+                    />
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
-                      id="terms"
-                      checked={registerData.acceptTerms}
-                      onCheckedChange={(checked) => setRegisterData({ ...registerData, acceptTerms: checked as boolean })}
+                      id="accept-terms"
+                      checked={registerForm.acceptTerms}
+                      onCheckedChange={(checked) => setRegisterForm({ ...registerForm, acceptTerms: checked as boolean })}
+                      disabled={loading}
                     />
-                    <Label htmlFor="terms" className="text-sm">
+                    <Label htmlFor="accept-terms" className="text-sm">
                       Acepto los términos y condiciones
                     </Label>
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Creando cuenta...' : 'Crear Cuenta'}
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creando cuenta...
+                      </>
+                    ) : (
+                      'Crear Cuenta'
+                    )}
                   </Button>
                 </form>
               </TabsContent>

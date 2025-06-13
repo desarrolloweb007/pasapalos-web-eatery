@@ -1,260 +1,25 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useAuth, UserRole } from '@/context/AuthContext';
-import { Plus, Users, Package, ShoppingBag, Edit, Trash2, Loader2 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { Edit, Trash2, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
-  ingredients: string[];
-  category: string;
-  image_url?: string;
-  is_active: boolean;
-}
-
-interface UserProfile {
-  id: string;
-  full_name: string;
-  role_id: number;
-  roles?: {
-    name: string;
-  };
-}
+import { AdminStats } from '@/components/admin/AdminStats';
+import { ProductForm } from '@/components/admin/ProductForm';
+import { useAdminData } from '@/hooks/useAdminData';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
 
-interface DatabaseOrder {
-  id: string;
-  customer_name: string;
-  user_id: string | null;
-  total_price: number;
-  status: OrderStatus;
-  notes: string | null;
-  created_at: string;
-  order_items: {
-    id: string;
-    quantity: number;
-    unit_price: number;
-    total_price: number;
-    products: {
-      name: string;
-    };
-  }[];
-}
-
 const AdminDashboard = () => {
   const { user, userProfile, loading: authLoading } = useAuth();
-  const [orders, setOrders] = useState<DatabaseOrder[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id);
   const [activeTab, setActiveTab] = useState('overview');
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Product form state
-  const [productForm, setProductForm] = useState({
-    name: '',
-    price: '',
-    description: '',
-    ingredients: '',
-    category: '',
-    image: null as File | null,
-  });
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      initializeData();
-    }
-  }, [authLoading, user]);
-
-  const initializeData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchOrders(),
-        fetchProducts(),
-        fetchUsers()
-      ]);
-    } catch (error) {
-      console.error('Error initializing dashboard data:', error);
-      toast({
-        title: "Error",
-        description: "Error al cargar los datos del dashboard.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchOrders = async () => {
-    try {
-      console.log('Fetching orders...');
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            id,
-            quantity,
-            unit_price,
-            total_price,
-            products (name)
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching orders:', error);
-        throw error;
-      }
-      
-      // Cast the status to the correct type
-      const typedOrders = (data || []).map(order => ({
-        ...order,
-        status: order.status as OrderStatus
-      }));
-      
-      console.log('Orders fetched successfully:', typedOrders.length);
-      setOrders(typedOrders);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      setOrders([]);
-    }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      console.log('Fetching products...');
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('Error fetching products:', error);
-        throw error;
-      }
-      
-      console.log('Products fetched successfully:', data?.length || 0);
-      setProducts(data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      setProducts([]);
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      console.log('Fetching users...');
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select(`
-          id,
-          full_name,
-          role_id,
-          roles (name)
-        `)
-        .order('full_name');
-
-      if (error) {
-        console.error('Error fetching users:', error);
-        throw error;
-      }
-      
-      console.log('Users fetched successfully:', data?.length || 0);
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      setUsers([]);
-    }
-  };
-
-  const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!productForm.name || !productForm.price || !productForm.description || !productForm.category) {
-      toast({
-        title: "Error",
-        description: "Por favor completa todos los campos requeridos.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!user?.id) {
-      toast({
-        title: "Error",
-        description: "Usuario no autenticado.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const newProduct = {
-        name: productForm.name.trim(),
-        price: parseFloat(productForm.price),
-        description: productForm.description.trim(),
-        ingredients: productForm.ingredients ? productForm.ingredients.split(',').map(ing => ing.trim()).filter(ing => ing.length > 0) : [],
-        category: productForm.category,
-        created_by: user.id,
-        is_active: true,
-      };
-
-      console.log('Creating product:', newProduct);
-
-      const { error } = await supabase
-        .from('products')
-        .insert([newProduct]);
-
-      if (error) {
-        console.error('Error creating product:', error);
-        throw error;
-      }
-
-      // Reset form
-      setProductForm({
-        name: '',
-        price: '',
-        description: '',
-        ingredients: '',
-        category: '',
-        image: null,
-      });
-
-      // Refresh products
-      await fetchProducts();
-
-      toast({
-        title: "Producto creado",
-        description: `${newProduct.name} ha sido agregado al menú.`,
-      });
-    } catch (error) {
-      console.error('Error creating product:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo crear el producto. Intenta de nuevo.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleDeleteProduct = async (productId: string) => {
     if (!productId) return;
@@ -266,10 +31,7 @@ const AdminDashboard = () => {
         .update({ is_active: false })
         .eq('id', productId);
 
-      if (error) {
-        console.error('Error deleting product:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       await fetchProducts();
       
@@ -297,10 +59,7 @@ const AdminDashboard = () => {
         .update({ role_id: newRoleId })
         .eq('id', userId);
 
-      if (error) {
-        console.error('Error updating user role:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       await fetchUsers();
       
@@ -363,6 +122,23 @@ const AdminDashboard = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col items-center justify-center min-h-96 gap-4">
+            <p className="text-destructive">{error}</p>
+            <Button onClick={refetchData}>Reintentar</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const activeProducts = products.filter(p => p.is_active);
+  const totalSales = orders.reduce((sum, order) => sum + (order.total_price || 0), 0);
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -381,156 +157,35 @@ const AdminDashboard = () => {
             <TabsTrigger value="users">Usuarios</TabsTrigger>
           </TabsList>
 
-          {/* Overview Tab */}
           <TabsContent value="overview">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Pedidos</CardTitle>
-                  <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{orders.length}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Productos en Menú</CardTitle>
-                  <Package className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{products.filter(p => p.is_active).length}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Usuarios Registrados</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{users.length}</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Ventas Total</CardTitle>
-                  <ShoppingBag className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {formatPrice(orders.reduce((sum, order) => sum + (order.total_price || 0), 0))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <AdminStats
+              ordersCount={orders.length}
+              productsCount={activeProducts.length}
+              usersCount={users.length}
+              totalSales={totalSales}
+            />
           </TabsContent>
 
-          {/* Products Tab */}
           <TabsContent value="products">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Create Product Form */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Plus className="h-5 w-5" />
-                    Crear Nuevo Producto
-                  </CardTitle>
-                  <CardDescription>
-                    Agrega un nuevo producto al menú del restaurante
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleCreateProduct} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="product-name">Nombre del producto *</Label>
-                      <Input
-                        id="product-name"
-                        value={productForm.name}
-                        onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                        placeholder="Ej: Arepa Reina Pepiada"
-                        required
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="product-price">Precio (COP) *</Label>
-                      <Input
-                        id="product-price"
-                        type="number"
-                        step="100"
-                        min="0"
-                        value={productForm.price}
-                        onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                        placeholder="0"
-                        required
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="product-description">Descripción *</Label>
-                      <Textarea
-                        id="product-description"
-                        value={productForm.description}
-                        onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                        placeholder="Describe el producto..."
-                        required
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="product-ingredients">Ingredientes (separados por coma)</Label>
-                      <Input
-                        id="product-ingredients"
-                        value={productForm.ingredients}
-                        onChange={(e) => setProductForm({ ...productForm, ingredients: e.target.value })}
-                        placeholder="Pollo, Aguacate, Mayonesa"
-                        disabled={isSubmitting}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="product-category">Categoría *</Label>
-                      <Select 
-                        value={productForm.category} 
-                        onValueChange={(value) => setProductForm({ ...productForm, category: value })}
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona una categoría" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="comida_rapida">Comidas Rápidas</SelectItem>
-                          <SelectItem value="especial">Especiales</SelectItem>
-                          <SelectItem value="extra">Extras</SelectItem>
-                          <SelectItem value="bebida">Bebidas</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button type="submit" className="w-full" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creando...
-                        </>
-                      ) : (
-                        'Crear Producto'
-                      )}
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
+              {user?.id && (
+                <ProductForm 
+                  onProductCreated={fetchProducts} 
+                  userId={user.id} 
+                />
+              )}
 
-              {/* Products List */}
               <Card>
                 <CardHeader>
                   <CardTitle>Productos Existentes</CardTitle>
                   <CardDescription>
-                    Gestiona los productos del menú ({products.filter(p => p.is_active).length} activos)
+                    Gestiona los productos del menú ({activeProducts.length} activos)
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {products.filter(p => p.is_active).length > 0 ? (
-                      products.filter(p => p.is_active).map((product) => (
+                    {activeProducts.length > 0 ? (
+                      activeProducts.map((product) => (
                         <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
                           <div className="flex-1">
                             <h4 className="font-medium">{product.name}</h4>
@@ -565,7 +220,6 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
 
-          {/* Orders Tab */}
           <TabsContent value="orders">
             <Card>
               <CardHeader>
@@ -627,7 +281,6 @@ const AdminDashboard = () => {
             </Card>
           </TabsContent>
 
-          {/* Users Tab */}
           <TabsContent value="users">
             <Card>
               <CardHeader>
