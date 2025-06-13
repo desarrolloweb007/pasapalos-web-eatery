@@ -44,7 +44,7 @@ interface DatabaseOrder {
   }[];
 }
 
-export const useAdminData = (userId: string | undefined) => {
+export const useAdminData = (userId: string | undefined, isAuthenticated: boolean) => {
   const [orders, setOrders] = useState<DatabaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -52,7 +52,7 @@ export const useAdminData = (userId: string | undefined) => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrders = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !isAuthenticated) return;
     
     try {
       console.log('Fetching orders...');
@@ -84,10 +84,10 @@ export const useAdminData = (userId: string | undefined) => {
       setError('Error al cargar los pedidos');
       setOrders([]);
     }
-  }, [userId]);
+  }, [userId, isAuthenticated]);
 
   const fetchProducts = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !isAuthenticated) return;
     
     try {
       console.log('Fetching products...');
@@ -105,10 +105,10 @@ export const useAdminData = (userId: string | undefined) => {
       setError('Error al cargar los productos');
       setProducts([]);
     }
-  }, [userId]);
+  }, [userId, isAuthenticated]);
 
   const fetchUsers = useCallback(async () => {
-    if (!userId) return;
+    if (!userId || !isAuthenticated) return;
     
     try {
       console.log('Fetching users...');
@@ -131,10 +131,10 @@ export const useAdminData = (userId: string | undefined) => {
       setError('Error al cargar los usuarios');
       setUsers([]);
     }
-  }, [userId]);
+  }, [userId, isAuthenticated]);
 
   const initializeData = useCallback(async () => {
-    if (!userId) {
+    if (!userId || !isAuthenticated) {
       setLoading(false);
       return;
     }
@@ -159,11 +159,31 @@ export const useAdminData = (userId: string | undefined) => {
     } finally {
       setLoading(false);
     }
-  }, [userId, fetchOrders, fetchProducts, fetchUsers]);
+  }, [userId, isAuthenticated, fetchOrders, fetchProducts, fetchUsers]);
 
   useEffect(() => {
     initializeData();
   }, [initializeData]);
+
+  // Set up realtime subscription for products
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const channel = supabase
+      .channel('products-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'products' }, 
+        () => {
+          console.log('Products changed, refetching...');
+          fetchProducts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, fetchProducts]);
 
   const refetchData = useCallback(() => {
     initializeData();

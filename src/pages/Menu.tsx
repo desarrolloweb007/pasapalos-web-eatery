@@ -35,15 +35,14 @@ const Menu = () => {
   const [selectedCategory, setSelectedCategory] = useState('todos');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { addItem } = useCart();
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
 
   const fetchProducts = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -61,6 +60,7 @@ const Menu = () => {
       setProducts(typedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
+      setError('No se pudieron cargar los productos. Intenta de nuevo.');
       toast({
         title: "Error",
         description: "No se pudieron cargar los productos. Intenta de nuevo.",
@@ -70,6 +70,26 @@ const Menu = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchProducts();
+
+    // Set up realtime subscription for products
+    const channel = supabase
+      .channel('menu-products')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'products' }, 
+        () => {
+          console.log('Products changed, refetching menu...');
+          fetchProducts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const filteredItems = products.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -84,7 +104,7 @@ const Menu = () => {
       name: item.name,
       price: item.price,
       description: item.description || '',
-      image: item.image_url || '/placeholder.svg',
+      image: getImageUrl(item.image_url),
     });
     
     toast({
@@ -105,7 +125,6 @@ const Menu = () => {
   const getImageUrl = (imageUrl: string | null) => {
     if (!imageUrl) return '/placeholder.svg';
     if (imageUrl.startsWith('http')) return imageUrl;
-    // Use the proper Supabase URL construction
     return `https://gezrpaubecdueuewdltq.supabase.co/storage/v1/object/public/product-images/${imageUrl}`;
   };
 
@@ -115,8 +134,24 @@ const Menu = () => {
         <Header />
         <div className="container mx-auto px-4 py-8">
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Cargando productos...</span>
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span>Cargando productos...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col justify-center items-center h-64 gap-4">
+            <p className="text-destructive text-center">{error}</p>
+            <Button onClick={fetchProducts}>Reintentar</Button>
           </div>
         </div>
       </div>

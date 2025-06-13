@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,8 +16,8 @@ import { useAdminData } from '@/hooks/useAdminData';
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
 
 const AdminDashboard = () => {
-  const { user, userProfile, loading: authLoading } = useAuth();
-  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id);
+  const { user, userProfile, loading: authLoading, initialized, isAuthenticated } = useAuth();
+  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id, isAuthenticated);
   const [activeTab, setActiveTab] = useState('overview');
 
   const handleDeleteProduct = async (productId: string) => {
@@ -106,7 +105,37 @@ const AdminDashboard = () => {
     return 'Administrador';
   };
 
-  if (authLoading || loading) {
+  const getImageUrl = (imageUrl: string | null) => {
+    if (!imageUrl) return '/placeholder.svg';
+    if (imageUrl.startsWith('http')) return imageUrl;
+    return `https://gezrpaubecdueuewdltq.supabase.co/storage/v1/object/public/product-images/${imageUrl}`;
+  };
+
+  // Show loading while auth is initializing
+  if (!initialized || authLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center min-h-96">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span>Inicializando aplicación...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to auth if not authenticated
+  if (!isAuthenticated) {
+    window.location.href = '/auth';
+    return null;
+  }
+
+  // Show loading while data is being fetched
+  if (loading) {
     return (
       <div className="min-h-screen bg-background">
         <Header />
@@ -146,7 +175,7 @@ const AdminDashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Panel de Administrador</h1>
-          <p className="text-muted-foreground">Bienvenido, {getUserDisplayName()}</p>
+          <p className="text-mute-foreground">Bienvenido, {getUserDisplayName()}</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -187,12 +216,23 @@ const AdminDashboard = () => {
                     {activeProducts.length > 0 ? (
                       activeProducts.map((product) => (
                         <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex-1">
-                            <h4 className="font-medium">{product.name}</h4>
-                            <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
-                            <Badge variant="secondary" className="mt-1">
-                              {product.category}
-                            </Badge>
+                          <div className="flex items-center gap-4 flex-1">
+                            <img
+                              src={getImageUrl(product.image_url)}
+                              alt={product.name}
+                              className="w-12 h-12 object-cover rounded"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = '/placeholder.svg';
+                              }}
+                            />
+                            <div className="flex-1">
+                              <h4 className="font-medium">{product.name}</h4>
+                              <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
+                              <Badge variant="secondary" className="mt-1">
+                                {product.category}
+                              </Badge>
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <Button variant="outline" size="sm">
