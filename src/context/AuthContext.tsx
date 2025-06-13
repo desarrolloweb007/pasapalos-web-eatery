@@ -115,12 +115,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Log security events
         if (event === 'SIGNED_IN' && session?.user) {
-          setTimeout(() => {
-            supabase.rpc('log_security_event', {
-              p_user_id: session.user.id,
-              p_action: 'login',
-              p_description: 'Usuario inició sesión'
-            }).catch(console.error);
+          setTimeout(async () => {
+            try {
+              await supabase.rpc('log_security_event', {
+                p_user_id: session.user.id,
+                p_action: 'login',
+                p_description: 'Usuario inició sesión'
+              });
+            } catch (error) {
+              console.error('Error logging security event:', error);
+            }
           }, 0);
         }
       }
