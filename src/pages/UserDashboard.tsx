@@ -62,7 +62,7 @@ interface InvoiceConfig {
 }
 
 export const UserDashboard = () => {
-  const { user, userProfile, signOut } = useAuth();
+  const { user, userProfile, logout } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -411,7 +411,7 @@ export const UserDashboard = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut();
+      await logout();
       navigate('/');
     } catch (error) {
       console.error('Error logging out:', error);
