@@ -26,6 +26,7 @@ const AdminDashboard = () => {
   const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers, fetchOrders } = useAdminData(user?.id, isAuthenticated);
   const [activeTab, setActiveTab] = useState('overview');
   const [editingProduct, setEditingProduct] = useState(null);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [invoiceConfig, setInvoiceConfig] = useState({
     nombre_restaurante: '',
     nit: '',
@@ -80,20 +81,39 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteOrder = async (orderId: string) => {
-    if (!orderId) return;
+    if (!orderId || deletingOrderId === orderId) return;
+
+    setDeletingOrderId(orderId);
 
     try {
       console.log('Deleting order:', orderId);
       
-      const { error } = await supabase
+      // First delete order items
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
+
+      if (itemsError) {
+        console.error('Error deleting order items:', itemsError);
+        throw itemsError;
+      }
+
+      // Then delete the order
+      const { error: orderError } = await supabase
         .from('orders')
         .delete()
         .eq('id', orderId);
 
-      if (error) throw error;
+      if (orderError) {
+        console.error('Error deleting order:', orderError);
+        throw orderError;
+      }
 
-      // Refrescar tanto los pedidos como los datos completos para actualizar estadísticas
-      await Promise.all([fetchOrders(), refetchData()]);
+      console.log('Order deleted successfully');
+
+      // Force refresh data
+      await refetchData();
 
       toast({
         title: "Pedido eliminado",
@@ -106,6 +126,8 @@ const AdminDashboard = () => {
         description: "No se pudo eliminar el pedido.",
         variant: "destructive",
       });
+    } finally {
+      setDeletingOrderId(null);
     }
   };
 
@@ -458,8 +480,13 @@ const AdminDashboard = () => {
                                   variant="outline" 
                                   size="sm" 
                                   className="text-destructive hover:text-destructive"
+                                  disabled={deletingOrderId === order.id}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  {deletingOrderId === order.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
@@ -474,8 +501,16 @@ const AdminDashboard = () => {
                                   <AlertDialogAction 
                                     onClick={() => handleDeleteOrder(order.id)}
                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    disabled={deletingOrderId === order.id}
                                   >
-                                    Eliminar
+                                    {deletingOrderId === order.id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        Eliminando...
+                                      </>
+                                    ) : (
+                                      'Eliminar'
+                                    )}
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
