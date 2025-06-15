@@ -11,6 +11,8 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AdminStats } from '@/components/admin/AdminStats';
 import { ProductForm } from '@/components/admin/ProductForm';
+import { InvoiceConfiguration } from '@/components/admin/InvoiceConfiguration';
+import { InvoicePreview } from '@/components/admin/InvoicePreview';
 import { useAdminData } from '@/hooks/useAdminData';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
@@ -19,6 +21,23 @@ const AdminDashboard = () => {
   const { user, userProfile, loading: authLoading, initialized, isAuthenticated } = useAuth();
   const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id, isAuthenticated);
   const [activeTab, setActiveTab] = useState('overview');
+  const [invoiceConfig, setInvoiceConfig] = useState({
+    nombre_restaurante: '',
+    nit: '',
+    direccion: '',
+    ciudad_pais: '',
+    telefono: '',
+    email: '',
+    color_primario: '#3B82F6',
+    tipografia: 'Arial',
+    posicion_logo: 'izquierda',
+    mostrar_direccion: true,
+    mostrar_nombre_cliente: true,
+    mostrar_id_pedido: true,
+    mostrar_estado_pedido: true,
+    mostrar_fecha_hora: true,
+    mensaje_personalizado: 'Gracias por su compra',
+  });
 
   const handleDeleteProduct = async (productId: string) => {
     if (!productId) return;
@@ -179,11 +198,12 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Resumen</TabsTrigger>
             <TabsTrigger value="products">Productos</TabsTrigger>
             <TabsTrigger value="orders">Pedidos</TabsTrigger>
             <TabsTrigger value="users">Usuarios</TabsTrigger>
+            <TabsTrigger value="billing">Configuración de facturación</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -368,6 +388,13 @@ const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="billing">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <InvoiceConfiguration onConfigChange={setInvoiceConfig} />
+              <InvoicePreview config={invoiceConfig} />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
