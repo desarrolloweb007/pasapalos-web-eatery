@@ -118,7 +118,7 @@ export const UserDashboard = () => {
     }
   };
 
-  // Cargar configuración de facturación
+  // Cargar configuración de facturación desde configuracion_factura
   const fetchInvoiceConfig = async () => {
     try {
       const { data, error } = await supabase
@@ -421,74 +421,75 @@ export const UserDashboard = () => {
   };
 
   if (!user || !userProfile) {
-    return <div>Cargando...</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Cargando panel de usuario...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header with orange theme matching the image */}
-      <div className="bg-gradient-to-r from-orange-400 to-yellow-500 shadow-lg">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo and title section */}
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                <span className="text-orange-500 font-bold text-xl">C</span>
+      {/* Header - Mismo diseño que AdminDashboard */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-yellow-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">C</span>
+                </div>
               </div>
-              <h1 className="text-white text-xl font-bold">Casa de los Pasapalos</h1>
-            </div>
-
-            {/* Navigation menu */}
-            <div className="hidden md:flex items-center space-x-8">
-              <button 
-                onClick={() => navigate('/')}
-                className="text-white hover:text-orange-100 flex items-center space-x-1 transition-colors"
-              >
-                <Home className="h-4 w-4" />
-                <span>Inicio</span>
-              </button>
-              <button 
-                onClick={() => navigate('/menu')}
-                className="text-white hover:text-orange-100 flex items-center space-x-1 transition-colors"
-              >
-                <MenuIcon className="h-4 w-4" />
-                <span>Menú</span>
-              </button>
-              <span className="text-white font-medium">Mi Panel</span>
-            </div>
-
-            {/* User info and logout */}
-            <div className="flex items-center space-x-4">
-              <div className="hidden md:block text-white">
-                <span className="text-sm">Hola, {userProfile.full_name}</span>
+              <div className="ml-4">
+                <h1 className="text-2xl font-bold text-gray-900">Panel de Usuario</h1>
+                <p className="text-sm text-gray-500">Casa de los Pasapalos</p>
               </div>
-              <Button 
-                onClick={handleLogout}
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <Button
                 variant="outline"
-                size="sm"
-                className="bg-white text-orange-500 border-white hover:bg-orange-50"
+                onClick={() => navigate('/')}
+                className="hidden sm:flex"
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                <span>Salir</span>
+                <Home className="h-4 w-4 mr-2" />
+                Inicio
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate('/menu')}
+                className="hidden sm:flex"
+              >
+                <MenuIcon className="h-4 w-4 mr-2" />
+                Menú
+              </Button>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                  <User className="h-5 w-5 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700">
+                    {userProfile.full_name}
+                  </span>
+                </div>
+                <Button variant="outline" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Cerrar Sesión
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Welcome section */}
-        <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Panel de Usuario</h2>
-          <p className="text-gray-600">Gestiona tus pedidos y descarga tus facturas</p>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Sección de Ordenar */}
-        <Card className="mb-6 border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
+        <Card className="mb-8 bg-gradient-to-r from-yellow-50 to-orange-50 border-yellow-200">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-yellow-600 rounded-full flex items-center justify-center">
                   <ShoppingCart className="h-6 w-6 text-white" />
                 </div>
                 <div>
@@ -498,7 +499,7 @@ export const UserDashboard = () => {
               </div>
               <Button 
                 onClick={() => navigate('/menu')}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3"
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3"
               >
                 Ir al Menú
               </Button>
@@ -506,22 +507,22 @@ export const UserDashboard = () => {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Sección principal - Mis Pedidos */}
           <div className="lg:col-span-2">
-            <Card className="border-orange-200">
-              <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
+            <Card>
+              <CardHeader className="border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center space-x-2">
-                    <Package className="h-5 w-5" />
+                    <Package className="h-5 w-5 text-yellow-600" />
                     <span>Mis Pedidos</span>
                   </CardTitle>
                   <select
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
-                    className="bg-white text-gray-900 border rounded px-3 py-1 text-sm"
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                   >
-                    <option value="all">Todos</option>
+                    <option value="all">Todos los pedidos</option>
                     <option value="today">Hoy</option>
                     <option value="week">Últimos 7 días</option>
                     <option value="month">Este mes</option>
@@ -530,20 +531,26 @@ export const UserDashboard = () => {
               </CardHeader>
               <CardContent className="p-6">
                 {loading ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
-                    <p className="mt-2 text-gray-600">Cargando pedidos...</p>
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Cargando pedidos...</p>
                   </div>
                 ) : filteredOrders.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-12 text-gray-500">
                     <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-                    <p className="text-lg">No tienes pedidos para mostrar</p>
+                    <p className="text-lg font-medium">No tienes pedidos para mostrar</p>
                     <p className="text-sm">¡Haz tu primer pedido ahora!</p>
+                    <Button 
+                      onClick={() => navigate('/menu')}
+                      className="mt-4 bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      Ir al Menú
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {filteredOrders.map((order) => (
-                      <div key={order.id} className="border border-orange-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-gradient-to-r from-orange-50 to-yellow-50">
+                      <div key={order.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center space-x-3">
                             <span className="font-semibold text-gray-800">#{order.id.substring(0, 8)}</span>
@@ -551,20 +558,20 @@ export const UserDashboard = () => {
                               {order.status}
                             </Badge>
                           </div>
-                          <span className="font-bold text-xl text-orange-600">${order.total_price.toFixed(2)}</span>
+                          <span className="font-bold text-xl text-yellow-600">${order.total_price.toFixed(2)}</span>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
                           <div className="flex items-center space-x-2">
-                            <User className="h-4 w-4 text-orange-500" />
+                            <User className="h-4 w-4 text-yellow-600" />
                             <span>{order.customer_name}</span>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Calendar className="h-4 w-4 text-orange-500" />
+                            <Calendar className="h-4 w-4 text-yellow-600" />
                             <span>{format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })}</span>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <Clock className="h-4 w-4 text-orange-500" />
+                            <Clock className="h-4 w-4 text-yellow-600" />
                             <span>{format(new Date(order.created_at), 'HH:mm:ss', { locale: es })}</span>
                           </div>
                         </div>
@@ -573,9 +580,9 @@ export const UserDashboard = () => {
                           <h4 className="font-medium mb-2 text-gray-800">Productos:</h4>
                           <ul className="space-y-1 text-sm">
                             {order.order_items.map((item) => (
-                              <li key={item.id} className="flex justify-between bg-white p-2 rounded border border-orange-100">
+                              <li key={item.id} className="flex justify-between bg-gray-50 p-2 rounded border">
                                 <span className="text-gray-700">{item.products.name} x{item.quantity}</span>
-                                <span className="font-medium text-orange-600">${item.total_price.toFixed(2)}</span>
+                                <span className="font-medium text-yellow-600">${item.total_price.toFixed(2)}</span>
                               </li>
                             ))}
                           </ul>
@@ -585,7 +592,7 @@ export const UserDashboard = () => {
                           onClick={() => generateInvoicePDF(order)}
                           variant="outline"
                           size="sm"
-                          className="w-full border-orange-300 text-orange-600 hover:bg-orange-50"
+                          className="w-full border-yellow-300 text-yellow-600 hover:bg-yellow-50"
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Descargar Factura
@@ -601,10 +608,10 @@ export const UserDashboard = () => {
           {/* Sidebar derecho */}
           <div className="space-y-6">
             {/* Rastrear Pedido */}
-            <Card className="border-orange-200">
-              <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
+            <Card>
+              <CardHeader className="border-b border-gray-200">
                 <CardTitle className="flex items-center space-x-2">
-                  <Search className="h-5 w-5" />
+                  <Search className="h-5 w-5 text-yellow-600" />
                   <span>Rastrear Pedido</span>
                 </CardTitle>
               </CardHeader>
@@ -615,11 +622,11 @@ export const UserDashboard = () => {
                     value={searchOrderId}
                     onChange={(e) => setSearchOrderId(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearchOrder()}
-                    className="border-orange-200 focus:border-orange-500"
+                    className="border-gray-300 focus:border-yellow-500 focus:ring-yellow-500"
                   />
                   <Button 
                     onClick={handleSearchOrder}
-                    className="w-full bg-orange-500 hover:bg-orange-600"
+                    className="w-full bg-yellow-600 hover:bg-yellow-700"
                     disabled={!searchOrderId.trim()}
                   >
                     <Search className="h-4 w-4 mr-2" />
@@ -657,10 +664,10 @@ export const UserDashboard = () => {
             </Card>
 
             {/* Sección de Descargas */}
-            <Card className="border-orange-200">
-              <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
+            <Card>
+              <CardHeader className="border-b border-gray-200">
                 <CardTitle className="flex items-center space-x-2">
-                  <Download className="h-5 w-5" />
+                  <Download className="h-5 w-5 text-yellow-600" />
                   <span>Descargas Recientes</span>
                 </CardTitle>
               </CardHeader>
@@ -670,19 +677,19 @@ export const UserDashboard = () => {
                 </p>
                 <div className="space-y-2">
                   {filteredOrders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-3 border border-orange-100 rounded hover:bg-orange-50 transition-colors">
+                    <div key={order.id} className="flex items-center justify-between p-3 border border-gray-200 rounded hover:bg-gray-50 transition-colors">
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-800">#{order.id.substring(0, 8)}</p>
                         <p className="text-xs text-gray-500">
                           {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })} - 
-                          <span className="text-orange-600 font-medium ml-1">${order.total_price.toFixed(2)}</span>
+                          <span className="text-yellow-600 font-medium ml-1">${order.total_price.toFixed(2)}</span>
                         </p>
                       </div>
                       <Button
                         onClick={() => generateInvoicePDF(order)}
                         variant="ghost"
                         size="sm"
-                        className="ml-2 text-orange-600 hover:bg-orange-100"
+                        className="ml-2 text-yellow-600 hover:bg-yellow-100"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
