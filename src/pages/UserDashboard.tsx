@@ -15,7 +15,8 @@ import {
   Calendar,
   Clock,
   Package,
-  User
+  User,
+  LogOut
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -61,7 +62,7 @@ interface InvoiceConfig {
 }
 
 export const UserDashboard = () => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -124,7 +125,12 @@ export const UserDashboard = () => {
         .limit(1)
         .single();
 
-      if (!error && data) {
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching invoice config:', error);
+        return;
+      }
+
+      if (data) {
         setInvoiceConfig(data);
       }
     } catch (error) {
@@ -238,9 +244,18 @@ export const UserDashboard = () => {
       }
 
       setSearchResult(data);
+      toast({
+        title: "¡Pedido encontrado!",
+        description: `Pedido #${data.id.substring(0, 8)} - Estado: ${data.status}`,
+      });
     } catch (error) {
       console.error('Error searching order:', error);
       setSearchResult(null);
+      toast({
+        title: "Error",
+        description: "Error al buscar el pedido",
+        variant: "destructive",
+      });
     }
   };
 
@@ -248,118 +263,137 @@ export const UserDashboard = () => {
   const generateInvoicePDF = (order: Order) => {
     if (!invoiceConfig) {
       toast({
-        title: "Error",
-        description: "No se pudo cargar la configuración de facturación",
+        title: "Error de configuración",
+        description: "No se encontró la configuración de facturación. Contacta al administrador.",
         variant: "destructive",
       });
       return;
     }
 
-    const doc = new jsPDF();
-    
-    // Configurar fuente
-    doc.setFont('helvetica');
-    
-    // Header con logo y datos del restaurante
-    let yPosition = 20;
-    
-    // Título
-    doc.setFontSize(20);
-    doc.setTextColor(invoiceConfig.color_primario);
-    doc.text(invoiceConfig.nombre_restaurante, 20, yPosition);
-    yPosition += 10;
-    
-    // Datos del restaurante
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    if (invoiceConfig.mostrar_direccion) {
-      doc.text(`NIT: ${invoiceConfig.nit}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Dirección: ${invoiceConfig.direccion}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`${invoiceConfig.ciudad_pais}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Tel: ${invoiceConfig.telefono}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Email: ${invoiceConfig.email}`, 20, yPosition);
-      yPosition += 15;
-    }
-    
-    // Datos del pedido
-    doc.setFontSize(14);
-    doc.text('FACTURA ELECTRÓNICA', 20, yPosition);
-    yPosition += 10;
-    
-    doc.setFontSize(10);
-    if (invoiceConfig.mostrar_id_pedido) {
-      doc.text(`ID Pedido: #${order.id.substring(0, 8)}`, 20, yPosition);
-      yPosition += 5;
-    }
-    
-    if (invoiceConfig.mostrar_nombre_cliente) {
-      doc.text(`Cliente: ${order.customer_name}`, 20, yPosition);
-      yPosition += 5;
-    }
-    
-    if (invoiceConfig.mostrar_fecha_hora) {
-      const date = new Date(order.created_at);
-      doc.text(`Fecha: ${format(date, 'dd/MM/yyyy', { locale: es })}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`Hora: ${format(date, 'HH:mm:ss', { locale: es })}`, 20, yPosition);
-      yPosition += 5;
-    }
-    
-    if (invoiceConfig.mostrar_estado_pedido) {
-      doc.text(`Estado: ${order.status}`, 20, yPosition);
+    try {
+      const doc = new jsPDF();
+      
+      // Configurar fuente
+      doc.setFont('helvetica');
+      
+      // Header con logo y datos del restaurante
+      let yPosition = 20;
+      
+      // Título
+      doc.setFontSize(20);
+      doc.setTextColor(invoiceConfig.color_primario);
+      doc.text(invoiceConfig.nombre_restaurante || 'Casa de los Pasapalos', 20, yPosition);
       yPosition += 10;
-    }
-    
-    // Tabla de productos
-    doc.text('PRODUCTOS:', 20, yPosition);
-    yPosition += 5;
-    
-    // Headers de tabla
-    doc.text('Producto', 20, yPosition);
-    doc.text('Cant.', 100, yPosition);
-    doc.text('Precio Unit.', 130, yPosition);
-    doc.text('Subtotal', 170, yPosition);
-    yPosition += 5;
-    
-    // Línea
-    doc.line(20, yPosition, 190, yPosition);
-    yPosition += 5;
-    
-    // Productos
-    order.order_items.forEach(item => {
-      doc.text(item.products.name, 20, yPosition);
-      doc.text(item.quantity.toString(), 100, yPosition);
-      doc.text(`$${item.unit_price.toFixed(2)}`, 130, yPosition);
-      doc.text(`$${item.total_price.toFixed(2)}`, 170, yPosition);
-      yPosition += 5;
-    });
-    
-    // Línea
-    doc.line(20, yPosition, 190, yPosition);
-    yPosition += 5;
-    
-    // Total
-    doc.setFontSize(12);
-    doc.text(`TOTAL: $${order.total_price.toFixed(2)}`, 130, yPosition);
-    yPosition += 15;
-    
-    // Mensaje personalizado
-    if (invoiceConfig.mensaje_personalizado) {
+      
+      // Datos del restaurante
       doc.setFontSize(10);
-      doc.text(invoiceConfig.mensaje_personalizado, 20, yPosition);
+      doc.setTextColor(0, 0, 0);
+      if (invoiceConfig.mostrar_direccion && invoiceConfig.nit) {
+        doc.text(`NIT: ${invoiceConfig.nit}`, 20, yPosition);
+        yPosition += 5;
+      }
+      if (invoiceConfig.mostrar_direccion && invoiceConfig.direccion) {
+        doc.text(`Dirección: ${invoiceConfig.direccion}`, 20, yPosition);
+        yPosition += 5;
+      }
+      if (invoiceConfig.mostrar_direccion && invoiceConfig.ciudad_pais) {
+        doc.text(`${invoiceConfig.ciudad_pais}`, 20, yPosition);
+        yPosition += 5;
+      }
+      if (invoiceConfig.mostrar_direccion && invoiceConfig.telefono) {
+        doc.text(`Tel: ${invoiceConfig.telefono}`, 20, yPosition);
+        yPosition += 5;
+      }
+      if (invoiceConfig.mostrar_direccion && invoiceConfig.email) {
+        doc.text(`Email: ${invoiceConfig.email}`, 20, yPosition);
+        yPosition += 5;
+      }
+      yPosition += 10;
+      
+      // Datos del pedido
+      doc.setFontSize(14);
+      doc.text('FACTURA ELECTRÓNICA', 20, yPosition);
+      yPosition += 10;
+      
+      doc.setFontSize(10);
+      if (invoiceConfig.mostrar_id_pedido) {
+        doc.text(`ID Pedido: #${order.id.substring(0, 8)}`, 20, yPosition);
+        yPosition += 5;
+      }
+      
+      if (invoiceConfig.mostrar_nombre_cliente) {
+        doc.text(`Cliente: ${order.customer_name}`, 20, yPosition);
+        yPosition += 5;
+      }
+      
+      if (invoiceConfig.mostrar_fecha_hora) {
+        const date = new Date(order.created_at);
+        doc.text(`Fecha: ${format(date, 'dd/MM/yyyy', { locale: es })}`, 20, yPosition);
+        yPosition += 5;
+        doc.text(`Hora: ${format(date, 'HH:mm:ss', { locale: es })}`, 20, yPosition);
+        yPosition += 5;
+      }
+      
+      if (invoiceConfig.mostrar_estado_pedido) {
+        doc.text(`Estado: ${order.status}`, 20, yPosition);
+        yPosition += 5;
+      }
+      yPosition += 5;
+      
+      // Tabla de productos
+      doc.text('PRODUCTOS:', 20, yPosition);
+      yPosition += 5;
+      
+      // Headers de tabla
+      doc.text('Producto', 20, yPosition);
+      doc.text('Cant.', 100, yPosition);
+      doc.text('Precio Unit.', 130, yPosition);
+      doc.text('Subtotal', 170, yPosition);
+      yPosition += 5;
+      
+      // Línea
+      doc.line(20, yPosition, 190, yPosition);
+      yPosition += 5;
+      
+      // Productos
+      order.order_items.forEach(item => {
+        doc.text(item.products.name, 20, yPosition);
+        doc.text(item.quantity.toString(), 100, yPosition);
+        doc.text(`$${item.unit_price.toFixed(2)}`, 130, yPosition);
+        doc.text(`$${item.total_price.toFixed(2)}`, 170, yPosition);
+        yPosition += 5;
+      });
+      
+      // Línea
+      doc.line(20, yPosition, 190, yPosition);
+      yPosition += 5;
+      
+      // Total
+      doc.setFontSize(12);
+      doc.text(`TOTAL: $${order.total_price.toFixed(2)}`, 130, yPosition);
+      yPosition += 15;
+      
+      // Mensaje personalizado
+      if (invoiceConfig.mensaje_personalizado) {
+        doc.setFontSize(10);
+        doc.text(invoiceConfig.mensaje_personalizado, 20, yPosition);
+      }
+      
+      // Guardar PDF
+      doc.save(`factura-${order.id.substring(0, 8)}.pdf`);
+      
+      toast({
+        title: "¡Factura generada!",
+        description: "La factura se ha descargado correctamente",
+      });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({
+        title: "Error",
+        description: "Error al generar la factura",
+        variant: "destructive",
+      });
     }
-    
-    // Guardar PDF
-    doc.save(`factura-${order.id.substring(0, 8)}.pdf`);
-    
-    toast({
-      title: "Factura generada",
-      description: "La factura se ha descargado correctamente",
-    });
   };
 
   // Obtener color del estado
@@ -375,19 +409,42 @@ export const UserDashboard = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
   if (!user || !userProfile) {
     return <div>Cargando...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Panel de Usuario</h1>
-          <p className="text-gray-600">Bienvenido, {userProfile.full_name}</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Panel de Usuario</h1>
+              <p className="text-gray-600">Bienvenido, {userProfile.full_name}</p>
+            </div>
+            <Button 
+              onClick={handleLogout}
+              variant="outline"
+              className="flex items-center space-x-2"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Cerrar Sesión</span>
+            </Button>
+          </div>
         </div>
+      </div>
 
+      <div className="max-w-7xl mx-auto p-6">
         {/* Sección de Ordenar */}
         <Card className="mb-6">
           <CardContent className="p-6">
@@ -422,7 +479,7 @@ export const UserDashboard = () => {
                   <select
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
-                    className="border rounded px-3 py-1"
+                    className="border rounded px-3 py-1 text-sm"
                   >
                     <option value="all">Todos</option>
                     <option value="today">Hoy</option>
@@ -512,21 +569,24 @@ export const UserDashboard = () => {
                     placeholder="Ingresa el ID del pedido (ej: #abc123)"
                     value={searchOrderId}
                     onChange={(e) => setSearchOrderId(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearchOrder()}
                   />
                   <Button 
                     onClick={handleSearchOrder}
                     className="w-full"
+                    disabled={!searchOrderId.trim()}
                   >
                     Buscar Pedido
                   </Button>
                   
                   {searchResult && (
-                    <div className="mt-4 p-4 border rounded-lg bg-gray-50">
-                      <h4 className="font-semibold mb-2">Pedido Encontrado</h4>
+                    <div className="mt-4 p-4 border rounded-lg bg-green-50 border-green-200">
+                      <h4 className="font-semibold mb-2 text-green-800">Pedido Encontrado</h4>
                       <div className="space-y-2 text-sm">
                         <p><strong>ID:</strong> #{searchResult.id.substring(0, 8)}</p>
-                        <p><strong>Estado:</strong> 
-                          <Badge className={`ml-2 ${getStatusColor(searchResult.status)} text-white`}>
+                        <p className="flex items-center gap-2">
+                          <strong>Estado:</strong> 
+                          <Badge className={`${getStatusColor(searchResult.status)} text-white`}>
                             {searchResult.status}
                           </Badge>
                         </p>
@@ -534,10 +594,10 @@ export const UserDashboard = () => {
                         <p><strong>Total:</strong> ${searchResult.total_price.toFixed(2)}</p>
                         <div>
                           <strong>Productos:</strong>
-                          <ul className="mt-1 ml-4">
+                          <ul className="mt-1 ml-4 space-y-1">
                             {searchResult.order_items.map((item) => (
-                              <li key={item.id}>
-                                {item.products.name} x{item.quantity}
+                              <li key={item.id} className="text-xs">
+                                • {item.products.name} x{item.quantity} - ${item.total_price.toFixed(2)}
                               </li>
                             ))}
                           </ul>
@@ -559,26 +619,32 @@ export const UserDashboard = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600 mb-4">
-                  Descarga las facturas de todos tus pedidos
+                  Descarga las facturas de tus pedidos recientes
                 </p>
                 <div className="space-y-2">
                   {filteredOrders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-2 border rounded">
-                      <div>
+                    <div key={order.id} className="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
+                      <div className="flex-1">
                         <p className="text-sm font-medium">#{order.id.substring(0, 8)}</p>
                         <p className="text-xs text-gray-500">
-                          {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })}
+                          {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })} - ${order.total_price.toFixed(2)}
                         </p>
                       </div>
                       <Button
                         onClick={() => generateInvoicePDF(order)}
                         variant="ghost"
                         size="sm"
+                        className="ml-2"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
+                  {filteredOrders.length === 0 && (
+                    <p className="text-center text-gray-500 text-sm py-4">
+                      No hay pedidos para mostrar
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
