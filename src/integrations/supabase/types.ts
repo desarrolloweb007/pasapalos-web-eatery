@@ -45,6 +45,75 @@ export type Database = {
         }
         Relationships: []
       }
+      configuracion_factura: {
+        Row: {
+          ciudad_pais: string
+          color_primario: string
+          created_at: string
+          direccion: string
+          email: string
+          id: string
+          logo_url: string | null
+          mensaje_personalizado: string | null
+          mostrar_direccion: boolean
+          mostrar_estado_pedido: boolean
+          mostrar_fecha_hora: boolean
+          mostrar_id_pedido: boolean
+          mostrar_nombre_cliente: boolean
+          nit: string
+          nombre_restaurante: string
+          posicion_logo: string
+          telefono: string
+          tipografia: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ciudad_pais?: string
+          color_primario?: string
+          created_at?: string
+          direccion?: string
+          email?: string
+          id?: string
+          logo_url?: string | null
+          mensaje_personalizado?: string | null
+          mostrar_direccion?: boolean
+          mostrar_estado_pedido?: boolean
+          mostrar_fecha_hora?: boolean
+          mostrar_id_pedido?: boolean
+          mostrar_nombre_cliente?: boolean
+          nit?: string
+          nombre_restaurante?: string
+          posicion_logo?: string
+          telefono?: string
+          tipografia?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ciudad_pais?: string
+          color_primario?: string
+          created_at?: string
+          direccion?: string
+          email?: string
+          id?: string
+          logo_url?: string | null
+          mensaje_personalizado?: string | null
+          mostrar_direccion?: boolean
+          mostrar_estado_pedido?: boolean
+          mostrar_fecha_hora?: boolean
+          mostrar_id_pedido?: boolean
+          mostrar_nombre_cliente?: boolean
+          nit?: string
+          nombre_restaurante?: string
+          posicion_logo?: string
+          telefono?: string
+          tipografia?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string | null
