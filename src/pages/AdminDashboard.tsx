@@ -86,49 +86,51 @@ const AdminDashboard = () => {
     setDeletingOrderId(orderId);
 
     try {
-      console.log('Starting order deletion process for:', orderId);
+      console.log('🗑️ Starting order deletion for ID:', orderId);
       
-      // First delete order items to avoid foreign key constraints
-      console.log('Deleting order items...');
+      // Step 1: Delete order items first (foreign key dependency)
+      console.log('📦 Deleting order items...');
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
         .eq('order_id', orderId);
 
       if (itemsError) {
-        console.error('Error deleting order items:', itemsError);
-        throw itemsError;
+        console.error('❌ Error deleting order items:', itemsError);
+        throw new Error(`Error eliminando items del pedido: ${itemsError.message}`);
       }
       
-      console.log('Order items deleted successfully');
+      console.log('✅ Order items deleted successfully');
 
-      // Then delete the order
-      console.log('Deleting order...');
+      // Step 2: Delete the main order
+      console.log('📋 Deleting main order...');
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
         .eq('id', orderId);
 
       if (orderError) {
-        console.error('Error deleting order:', orderError);
-        throw orderError;
+        console.error('❌ Error deleting order:', orderError);
+        throw new Error(`Error eliminando el pedido: ${orderError.message}`);
       }
 
-      console.log('Order deleted successfully from database');
+      console.log('✅ Order deleted successfully from database');
 
-      // Refresh all data to ensure UI is updated
-      console.log('Refreshing data...');
+      // Step 3: Refresh data to update UI immediately
+      console.log('🔄 Refreshing dashboard data...');
       await refetchData();
+
+      console.log('🎉 Order deletion completed successfully');
 
       toast({
         title: "Pedido eliminado",
         description: "El pedido ha sido eliminado correctamente.",
       });
-    } catch (error) {
-      console.error('Error in order deletion process:', error);
+    } catch (error: any) {
+      console.error('💥 Error in order deletion process:', error);
       toast({
-        title: "Error",
-        description: `No se pudo eliminar el pedido: ${error.message}`,
+        title: "Error al eliminar",
+        description: error.message || "No se pudo eliminar el pedido. Inténtalo de nuevo.",
         variant: "destructive",
       });
     } finally {
