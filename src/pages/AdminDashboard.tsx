@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -87,9 +86,10 @@ const AdminDashboard = () => {
     setDeletingOrderId(orderId);
 
     try {
-      console.log('Deleting order:', orderId);
+      console.log('Starting order deletion process for:', orderId);
       
       // First delete order items to avoid foreign key constraints
+      console.log('Deleting order items...');
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
@@ -99,8 +99,11 @@ const AdminDashboard = () => {
         console.error('Error deleting order items:', itemsError);
         throw itemsError;
       }
+      
+      console.log('Order items deleted successfully');
 
       // Then delete the order
+      console.log('Deleting order...');
       const { error: orderError } = await supabase
         .from('orders')
         .delete()
@@ -111,24 +114,21 @@ const AdminDashboard = () => {
         throw orderError;
       }
 
-      console.log('Order deleted successfully');
+      console.log('Order deleted successfully from database');
 
-      // Force complete data refresh to update both orders list and stats
-      await Promise.all([
-        fetchOrders(),
-        fetchProducts(), 
-        fetchUsers()
-      ]);
+      // Refresh all data to ensure UI is updated
+      console.log('Refreshing data...');
+      await refetchData();
 
       toast({
         title: "Pedido eliminado",
         description: "El pedido ha sido eliminado correctamente.",
       });
     } catch (error) {
-      console.error('Error deleting order:', error);
+      console.error('Error in order deletion process:', error);
       toast({
         title: "Error",
-        description: "No se pudo eliminar el pedido.",
+        description: `No se pudo eliminar el pedido: ${error.message}`,
         variant: "destructive",
       });
     } finally {
