@@ -1,102 +1,140 @@
-import React, { useState } from 'react';
-import { Header } from '@/components/Header';
+
+import React, { useState, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/context/AuthContext';
-import { Edit, Trash2, Loader2 } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { useAdminData } from '@/hooks/useAdminData';
 import { supabase } from '@/integrations/supabase/client';
 import { AdminStats } from '@/components/admin/AdminStats';
 import { ProductForm } from '@/components/admin/ProductForm';
+import { FeaturedProductsManager } from '@/components/admin/FeaturedProductsManager';
+import { OrderFilters } from '@/components/admin/OrderFilters';
 import { InvoiceConfiguration } from '@/components/admin/InvoiceConfiguration';
 import { InvoicePreview } from '@/components/admin/InvoicePreview';
-import { useAdminData } from '@/hooks/useAdminData';
+import { Package, Users, ShoppingCart, Settings, Trash2, Star } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
 
 const AdminDashboard = () => {
-  const { user, userProfile, loading: authLoading, initialized, isAuthenticated } = useAuth();
-  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id, isAuthenticated);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [invoiceConfig, setInvoiceConfig] = useState({
-    nombre_restaurante: '',
-    nit: '',
-    direccion: '',
-    ciudad_pais: '',
-    telefono: '',
-    email: '',
-    color_primario: '#3B82F6',
-    tipografia: 'Arial',
-    posicion_logo: 'izquierda',
-    mostrar_direccion: true,
-    mostrar_nombre_cliente: true,
-    mostrar_id_pedido: true,
-    mostrar_estado_pedido: true,
-    mostrar_fecha_hora: true,
-    mensaje_personalizado: 'Gracias por su compra',
+  const { user, userProfile } = useAuth();
+  const { orders, products, users, loading, error, refetchData } = useAdminData(user?.id, !!user);
+  
+  // Estados para filtros de pedidos
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showTodayOnly, setShowTodayOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Estado para eliminar pedidos
+  const [deletingOrder, setDeletingOrder] = useState<string | null>(null);
+
+  // Configurar realtime para pedidos
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('orders-realtime')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'orders' }, 
+        () => {
+          console.log('Orders changed, refetching...');
+          refetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, refetchData]);
+
+  // Filtrar pedidos
+  const filteredOrders = orders.filter(order => {
+    // Filtro de búsqueda
+    const matchesSearch = order.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filtro de fecha (solo hoy)
+    let matchesDate = true;
+    if (showTodayOnly) {
+      const today = new Date().toDateString();
+      const orderDate = new Date(order.created_at).toDateString();
+      matchesDate = today === orderDate;
+    }
+    
+    // Filtro de estado
+    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+    
+    return matchesSearch && matchesDate && matchesStatus;
   });
 
-  const handleDeleteProduct = async (productId: string) => {
-    if (!productId) return;
-
+  const handleUpdateOrderStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
-      console.log('Deleting product:', productId);
       const { error } = await supabase
-        .from('products')
-        .update({ is_active: false })
-        .eq('id', productId);
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
 
       if (error) throw error;
 
-      await fetchProducts();
-      
       toast({
-        title: "Producto eliminado",
-        description: "El producto ha sido eliminado del menú.",
+        title: "Estado actualizado",
+        description: "El estado del pedido ha sido actualizado.",
       });
+
+      refetchData();
     } catch (error) {
-      console.error('Error deleting product:', error);
+      console.error('Error updating order status:', error);
       toast({
         title: "Error",
-        description: "No se pudo eliminar el producto.",
+        description: "No se pudo actualizar el estado del pedido.",
         variant: "destructive",
       });
     }
   };
 
-  const handleChangeUserRole = async (userId: string, newRoleId: number) => {
-    if (!userId || !newRoleId) return;
-
+  const handleDeleteOrder = async (orderId: string) => {
+    setDeletingOrder(orderId);
+    
     try {
-      console.log('Changing user role:', userId, newRoleId);
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ role_id: newRoleId })
-        .eq('id', userId);
+      // Primero eliminar los items del pedido
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId);
 
-      if (error) throw error;
+      if (itemsError) throw itemsError;
 
-      await fetchUsers();
-      
+      // Luego eliminar el pedido
+      const { error: orderError } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (orderError) throw orderError;
+
       toast({
-        title: "Rol actualizado",
-        description: "El rol del usuario ha sido actualizado correctamente.",
+        title: "Pedido eliminado",
+        description: "El pedido ha sido eliminado correctamente.",
       });
+
+      refetchData();
     } catch (error) {
-      console.error('Error updating user role:', error);
+      console.error('Error deleting order:', error);
       toast({
         title: "Error",
-        description: "No se pudo actualizar el rol del usuario.",
+        description: "No se pudo eliminar el pedido.",
         variant: "destructive",
       });
+    } finally {
+      setDeletingOrder(null);
     }
   };
 
   const formatPrice = (price: number) => {
-    if (typeof price !== 'number' || isNaN(price)) return '$0';
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
@@ -105,299 +143,290 @@ const AdminDashboard = () => {
     }).format(price);
   };
 
-  const getStatusBadgeVariant = (status: OrderStatus) => {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('es-ES');
+  };
+
+  const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'pendiente': return 'destructive';
+      case 'pendiente': return 'default';
       case 'recibido': return 'secondary';
-      case 'en_espera': return 'default';
-      case 'cocinando': return 'default';
-      case 'pendiente_entrega': return 'secondary';
+      case 'en_espera': return 'outline';
+      case 'cocinando': return 'destructive';
+      case 'pendiente_entrega': return 'default';
       case 'entregado': return 'default';
-      default: return 'secondary';
+      default: return 'default';
     }
   };
 
-  const getUserDisplayName = () => {
-    if (userProfile?.full_name) return userProfile.full_name;
-    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
-    if (user?.email) return user.email;
-    return 'Administrador';
-  };
-
-  const getImageUrl = (imageUrl: string | null) => {
-    if (!imageUrl) return '/placeholder.svg';
-    if (imageUrl.startsWith('http')) return imageUrl;
-    return `https://gezrpaubecdueuewdltq.supabase.co/storage/v1/object/public/product-images/${imageUrl}`;
-  };
-
-  // Show loading while auth is initializing
-  if (!initialized || authLoading) {
+  if (!user || userProfile?.role_id !== 1) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center min-h-96">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span>Inicializando aplicación...</span>
-            </div>
-          </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-destructive mb-4">Acceso denegado</h1>
+          <p>No tienes permisos para acceder al panel de administración.</p>
         </div>
       </div>
     );
   }
 
-  // Redirect to auth if not authenticated
-  if (!isAuthenticated) {
-    window.location.href = '/auth';
-    return null;
-  }
-
-  // Show loading while data is being fetched
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center min-h-96">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span>Cargando dashboard...</span>
-            </div>
-          </div>
-        </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Cargando dashboard...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col items-center justify-center min-h-96 gap-4">
-            <p className="text-destructive">{error}</p>
-            <Button onClick={refetchData}>Reintentar</Button>
-          </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-destructive">
+          Error al cargar los datos: {error}
         </div>
       </div>
     );
   }
 
-  const activeProducts = products.filter(p => p.is_active);
-  const totalSales = orders.reduce((sum, order) => sum + (order.total_price || 0), 0);
-
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Panel de Administrador</h1>
-          <p className="text-mute-foreground">Bienvenido, {getUserDisplayName()}</p>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="overview">Resumen</TabsTrigger>
-            <TabsTrigger value="products">Productos</TabsTrigger>
-            <TabsTrigger value="orders">Pedidos</TabsTrigger>
-            <TabsTrigger value="users">Usuarios</TabsTrigger>
-            <TabsTrigger value="billing">Configuración de facturación</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview">
-            <AdminStats
-              ordersCount={orders.length}
-              productsCount={activeProducts.length}
-              usersCount={users.length}
-              totalSales={totalSales}
-            />
-          </TabsContent>
-
-          <TabsContent value="products">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {user?.id && (
-                <ProductForm 
-                  onProductCreated={fetchProducts} 
-                  userId={user.id} 
-                />
-              )}
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Productos Existentes</CardTitle>
-                  <CardDescription>
-                    Gestiona los productos del menú ({activeProducts.length} activos)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
-                    {activeProducts.length > 0 ? (
-                      activeProducts.map((product) => (
-                        <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4 flex-1">
-                            <img
-                              src={getImageUrl(product.image_url)}
-                              alt={product.name}
-                              className="w-12 h-12 object-cover rounded"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = '/placeholder.svg';
-                              }}
-                            />
-                            <div className="flex-1">
-                              <h4 className="font-medium">{product.name}</h4>
-                              <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
-                              <Badge variant="secondary" className="mt-1">
-                                {product.category}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground">No hay productos activos.</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="orders">
-            <Card>
-              <CardHeader>
-                <CardTitle>Todos los Pedidos</CardTitle>
-                <CardDescription>
-                  Visualiza todos los pedidos realizados en la plataforma ({orders.length} total)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {orders.length > 0 ? (
-                    orders.map((order) => (
-                      <div key={order.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h4 className="font-medium">Pedido #{order.id.slice(0, 8)}</h4>
-                            <p className="text-sm text-muted-foreground">Cliente: {order.customer_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {new Date(order.created_at).toLocaleString('es-CO')}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant={getStatusBadgeVariant(order.status)}>
-                              {order.status}
-                            </Badge>
-                            <p className="text-lg font-bold text-primary mt-1">
-                              {formatPrice(order.total_price)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Productos:</p>
-                          {order.order_items && order.order_items.length > 0 ? (
-                            order.order_items.map((item, index) => (
-                              <div key={index} className="text-sm text-muted-foreground flex justify-between">
-                                <span>{item.quantity}x {item.products?.name || 'Producto desconocido'}</span>
-                                <span>{formatPrice(item.total_price)}</span>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No hay items en este pedido</p>
-                          )}
-                        </div>
-                        {order.notes && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-sm font-medium">Notas:</p>
-                            <p className="text-sm text-muted-foreground">{order.notes}</p>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">No hay pedidos registrados.</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gestión de Usuarios</CardTitle>
-                <CardDescription>
-                  Administra los usuarios registrados y sus roles ({users.length} total)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {users.length > 0 ? (
-                    users.map((userItem) => (
-                      <div key={userItem.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h4 className="font-medium">{userItem.full_name}</h4>
-                          <p className="text-sm text-muted-foreground">ID: {userItem.id.slice(0, 8)}...</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <Badge variant={userItem.role_id === 1 ? 'default' : 'secondary'}>
-                            {userItem.roles?.name || 'usuario'}
-                          </Badge>
-                          <Select
-                            value={userItem.role_id.toString()}
-                            onValueChange={(newRoleId) => handleChangeUserRole(userItem.id, parseInt(newRoleId))}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="5">Usuario</SelectItem>
-                              <SelectItem value="4">Mesero</SelectItem>
-                              <SelectItem value="3">Cocinero</SelectItem>
-                              <SelectItem value="2">Cajero</SelectItem>
-                              <SelectItem value="1">Admin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">No hay usuarios registrados.</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="billing">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <InvoiceConfiguration onConfigChange={setInvoiceConfig} />
-              <InvoicePreview config={invoiceConfig} />
-            </div>
-          </TabsContent>
-        </Tabs>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Panel de Administración</h1>
+        <p className="text-muted-foreground">
+          Gestiona pedidos, productos y configuración del restaurante
+        </p>
       </div>
+
+      <Tabs defaultValue="stats" className="space-y-6">
+        <TabsList className="grid w-full lg:w-auto grid-cols-2 lg:grid-cols-6">
+          <TabsTrigger value="stats">Estadísticas</TabsTrigger>
+          <TabsTrigger value="orders">Pedidos</TabsTrigger>
+          <TabsTrigger value="products">Productos</TabsTrigger>
+          <TabsTrigger value="featured">Destacados</TabsTrigger>
+          <TabsTrigger value="users">Usuarios</TabsTrigger>
+          <TabsTrigger value="invoices">Facturas</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="stats">
+          <AdminStats 
+            orders={orders}
+            products={products}
+            users={users}
+          />
+        </TabsContent>
+
+        <TabsContent value="orders">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                Gestión de Pedidos
+              </CardTitle>
+              <CardDescription>
+                Visualiza y gestiona todos los pedidos del restaurante
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OrderFilters
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                showTodayOnly={showTodayOnly}
+                onToggleTodayOnly={() => setShowTodayOnly(!showTodayOnly)}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+              />
+              
+              <div className="space-y-4">
+                {filteredOrders.map((order) => (
+                  <Card key={order.id}>
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h3 className="font-semibold text-lg">{order.customer_name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Pedido #{order.id.substring(0, 8)}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatDate(order.created_at)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={getStatusBadgeColor(order.status || 'pendiente')}>
+                            {order.status || 'pendiente'}
+                          </Badge>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                disabled={deletingOrder === order.id}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar pedido?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta acción no se puede deshacer. Se eliminará permanentemente el pedido y todos sus elementos.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteOrder(order.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2 mb-4">
+                        {order.order_items.map((item) => (
+                          <div key={item.id} className="flex justify-between text-sm">
+                            <span>{item.quantity}x {item.products.name}</span>
+                            <span>{formatPrice(item.total_price)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="flex justify-between items-center pt-4 border-t">
+                        <span className="font-semibold">
+                          Total: {formatPrice(order.total_price)}
+                        </span>
+                        <Select
+                          value={order.status || 'pendiente'}
+                          onValueChange={(value) => handleUpdateOrderStatus(order.id, value as OrderStatus)}
+                        >
+                          <SelectTrigger className="w-48">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pendiente">Pendiente</SelectItem>
+                            <SelectItem value="recibido">Recibido</SelectItem>
+                            <SelectItem value="en_espera">En espera</SelectItem>
+                            <SelectItem value="cocinando">Cocinando</SelectItem>
+                            <SelectItem value="pendiente_entrega">Pendiente entrega</SelectItem>
+                            <SelectItem value="entregado">Entregado</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                {filteredOrders.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    {searchTerm || showTodayOnly || statusFilter !== 'all' 
+                      ? 'No se encontraron pedidos con los filtros aplicados'
+                      : 'No hay pedidos registrados'
+                    }
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="products">
+          <div className="space-y-6">
+            <ProductForm 
+              onProductCreated={refetchData}
+              userId={user.id}
+            />
+            
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Productos ({products.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4">
+                  {products.map((product) => (
+                    <div key={product.id} className="flex justify-between items-center p-4 border rounded">
+                      <div>
+                        <h3 className="font-medium">{product.name}</h3>
+                        <p className="text-sm text-muted-foreground">{product.description}</p>
+                        <p className="text-sm font-medium">{formatPrice(product.price)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{product.category}</Badge>
+                        {product.is_featured && (
+                          <Badge variant="secondary">
+                            <Star className="h-3 w-3 mr-1" />
+                            Destacado
+                          </Badge>
+                        )}
+                        <Badge variant={product.is_active ? "default" : "secondary"}>
+                          {product.is_active ? "Activo" : "Inactivo"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {products.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No hay productos registrados
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="featured">
+          <FeaturedProductsManager
+            products={products}
+            onProductUpdate={refetchData}
+          />
+        </TabsContent>
+
+        <TabsContent value="users">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Usuarios Registrados ({users.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {users.map((userItem) => (
+                  <div key={userItem.id} className="flex justify-between items-center p-4 border rounded">
+                    <div>
+                      <h3 className="font-medium">{userItem.full_name}</h3>
+                      <p className="text-sm text-muted-foreground">ID: {userItem.id}</p>
+                    </div>
+                    <Badge variant="outline">
+                      {userItem.roles?.name || 'Sin rol'}
+                    </Badge>
+                  </div>
+                ))}
+                
+                {users.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No hay usuarios registrados
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="invoices">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <InvoiceConfiguration userId={user.id} />
+            <InvoicePreview />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

@@ -14,6 +14,8 @@ interface Product {
   category: string;
   image_url?: string;
   is_active: boolean;
+  is_featured: boolean;
+  rating: number;
 }
 
 interface UserProfile {
@@ -98,8 +100,16 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
 
       if (error) throw error;
       
-      console.log('Products fetched successfully:', data?.length || 0);
-      setProducts(data || []);
+      // Asegurar que los productos tengan los campos requeridos
+      const typedProducts = (data || []).map(product => ({
+        ...product,
+        is_featured: product.is_featured ?? false,
+        rating: product.rating ?? 0,
+        ingredients: product.ingredients ?? []
+      }));
+      
+      console.log('Products fetched successfully:', typedProducts.length);
+      setProducts(typedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
       setError('Error al cargar los productos');
