@@ -2,9 +2,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import type { Product } from '@/types/product';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  ingredients: string[];
+  category: string;
+  image_url?: string;
+  is_active: boolean;
+}
 
 interface UserProfile {
   id: string;
@@ -88,14 +98,8 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
 
       if (error) throw error;
       
-      // Type assertion to ensure proper category types
-      const typedProducts = (data || []).map(product => ({
-        ...product,
-        category: product.category as 'comida_rapida' | 'especial' | 'extra' | 'bebida'
-      }));
-      
-      console.log('Products fetched successfully:', typedProducts.length);
-      setProducts(typedProducts);
+      console.log('Products fetched successfully:', data?.length || 0);
+      setProducts(data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
       setError('Error al cargar los productos');
@@ -161,22 +165,11 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
     initializeData();
   }, [initializeData]);
 
-  // Set up realtime subscription for orders and products
+  // Set up realtime subscription for products
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const ordersChannel = supabase
-      .channel('orders-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'orders' }, 
-        () => {
-          console.log('Orders changed, refetching...');
-          fetchOrders();
-        }
-      )
-      .subscribe();
-
-    const productsChannel = supabase
+    const channel = supabase
       .channel('products-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'products' }, 
@@ -188,10 +181,9 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
       .subscribe();
 
     return () => {
-      supabase.removeChannel(ordersChannel);
-      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(channel);
     };
-  }, [isAuthenticated, fetchOrders, fetchProducts]);
+  }, [isAuthenticated, fetchProducts]);
 
   const refetchData = useCallback(() => {
     initializeData();
