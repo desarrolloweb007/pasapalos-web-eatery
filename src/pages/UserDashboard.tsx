@@ -16,7 +16,9 @@ import {
   Clock,
   Package,
   User,
-  LogOut
+  LogOut,
+  Home,
+  Menu as MenuIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -424,41 +426,79 @@ export const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      {/* Header with orange theme matching the image */}
+      <div className="bg-gradient-to-r from-orange-400 to-yellow-500 shadow-lg">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Panel de Usuario</h1>
-              <p className="text-gray-600">Bienvenido, {userProfile.full_name}</p>
+            {/* Logo and title section */}
+            <div className="flex items-center space-x-4">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
+                <span className="text-orange-500 font-bold text-xl">C</span>
+              </div>
+              <h1 className="text-white text-xl font-bold">Casa de los Pasapalos</h1>
             </div>
-            <Button 
-              onClick={handleLogout}
-              variant="outline"
-              className="flex items-center space-x-2"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Cerrar Sesión</span>
-            </Button>
+
+            {/* Navigation menu */}
+            <div className="hidden md:flex items-center space-x-8">
+              <button 
+                onClick={() => navigate('/')}
+                className="text-white hover:text-orange-100 flex items-center space-x-1 transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                <span>Inicio</span>
+              </button>
+              <button 
+                onClick={() => navigate('/menu')}
+                className="text-white hover:text-orange-100 flex items-center space-x-1 transition-colors"
+              >
+                <MenuIcon className="h-4 w-4" />
+                <span>Menú</span>
+              </button>
+              <span className="text-white font-medium">Mi Panel</span>
+            </div>
+
+            {/* User info and logout */}
+            <div className="flex items-center space-x-4">
+              <div className="hidden md:block text-white">
+                <span className="text-sm">Hola, {userProfile.full_name}</span>
+              </div>
+              <Button 
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="bg-white text-orange-500 border-white hover:bg-orange-50"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                <span>Salir</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto p-6">
+        {/* Welcome section */}
+        <div className="mb-6">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Panel de Usuario</h2>
+          <p className="text-gray-600">Gestiona tus pedidos y descarga tus facturas</p>
+        </div>
+
         {/* Sección de Ordenar */}
-        <Card className="mb-6">
+        <Card className="mb-6 border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <ShoppingCart className="h-8 w-8 text-yellow-600" />
+                <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center">
+                  <ShoppingCart className="h-6 w-6 text-white" />
+                </div>
                 <div>
-                  <h3 className="text-lg font-semibold">¿Deseas ordenar tu pedido?</h3>
-                  <p className="text-gray-600">¡Hazlo ahora!</p>
+                  <h3 className="text-lg font-semibold text-gray-900">¿Deseas ordenar tu pedido?</h3>
+                  <p className="text-gray-600">¡Hazlo ahora y disfruta de nuestros deliciosos pasapalos!</p>
                 </div>
               </div>
               <Button 
                 onClick={() => navigate('/menu')}
-                className="bg-yellow-600 hover:bg-yellow-700"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3"
               >
                 Ir al Menú
               </Button>
@@ -469,8 +509,8 @@ export const UserDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Sección principal - Mis Pedidos */}
           <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
+            <Card className="border-orange-200">
+              <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center space-x-2">
                     <Package className="h-5 w-5" />
@@ -479,7 +519,7 @@ export const UserDashboard = () => {
                   <select
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
-                    className="border rounded px-3 py-1 text-sm"
+                    className="bg-white text-gray-900 border rounded px-3 py-1 text-sm"
                   >
                     <option value="all">Todos</option>
                     <option value="today">Hoy</option>
@@ -488,49 +528,54 @@ export const UserDashboard = () => {
                   </select>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 {loading ? (
-                  <div className="text-center py-8">Cargando pedidos...</div>
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                    <p className="mt-2 text-gray-600">Cargando pedidos...</p>
+                  </div>
                 ) : filteredOrders.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">
-                    No tienes pedidos para mostrar
+                    <Package className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                    <p className="text-lg">No tienes pedidos para mostrar</p>
+                    <p className="text-sm">¡Haz tu primer pedido ahora!</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {filteredOrders.map((order) => (
-                      <div key={order.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-semibold">#{order.id.substring(0, 8)}</span>
+                      <div key={order.id} className="border border-orange-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-gradient-to-r from-orange-50 to-yellow-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <span className="font-semibold text-gray-800">#{order.id.substring(0, 8)}</span>
                             <Badge className={`${getStatusColor(order.status)} text-white`}>
                               {order.status}
                             </Badge>
                           </div>
-                          <span className="font-bold text-lg">${order.total_price.toFixed(2)}</span>
+                          <span className="font-bold text-xl text-orange-600">${order.total_price.toFixed(2)}</span>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-3">
-                          <div className="flex items-center space-x-1">
-                            <User className="h-4 w-4" />
+                          <div className="flex items-center space-x-2">
+                            <User className="h-4 w-4 text-orange-500" />
                             <span>{order.customer_name}</span>
                           </div>
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-4 w-4" />
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-orange-500" />
                             <span>{format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })}</span>
                           </div>
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-4 w-4" />
+                          <div className="flex items-center space-x-2">
+                            <Clock className="h-4 w-4 text-orange-500" />
                             <span>{format(new Date(order.created_at), 'HH:mm:ss', { locale: es })}</span>
                           </div>
                         </div>
 
                         <div className="mb-3">
-                          <h4 className="font-medium mb-2">Productos:</h4>
+                          <h4 className="font-medium mb-2 text-gray-800">Productos:</h4>
                           <ul className="space-y-1 text-sm">
                             {order.order_items.map((item) => (
-                              <li key={item.id} className="flex justify-between">
-                                <span>{item.products.name} x{item.quantity}</span>
-                                <span>${item.total_price.toFixed(2)}</span>
+                              <li key={item.id} className="flex justify-between bg-white p-2 rounded border border-orange-100">
+                                <span className="text-gray-700">{item.products.name} x{item.quantity}</span>
+                                <span className="font-medium text-orange-600">${item.total_price.toFixed(2)}</span>
                               </li>
                             ))}
                           </ul>
@@ -540,7 +585,7 @@ export const UserDashboard = () => {
                           onClick={() => generateInvoicePDF(order)}
                           variant="outline"
                           size="sm"
-                          className="w-full"
+                          className="w-full border-orange-300 text-orange-600 hover:bg-orange-50"
                         >
                           <Download className="h-4 w-4 mr-2" />
                           Descargar Factura
@@ -556,26 +601,28 @@ export const UserDashboard = () => {
           {/* Sidebar derecho */}
           <div className="space-y-6">
             {/* Rastrear Pedido */}
-            <Card>
-              <CardHeader>
+            <Card className="border-orange-200">
+              <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
                 <CardTitle className="flex items-center space-x-2">
                   <Search className="h-5 w-5" />
                   <span>Rastrear Pedido</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <div className="space-y-4">
                   <Input
                     placeholder="Ingresa el ID del pedido (ej: #abc123)"
                     value={searchOrderId}
                     onChange={(e) => setSearchOrderId(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearchOrder()}
+                    className="border-orange-200 focus:border-orange-500"
                   />
                   <Button 
                     onClick={handleSearchOrder}
-                    className="w-full"
+                    className="w-full bg-orange-500 hover:bg-orange-600"
                     disabled={!searchOrderId.trim()}
                   >
+                    <Search className="h-4 w-4 mr-2" />
                     Buscar Pedido
                   </Button>
                   
@@ -591,7 +638,7 @@ export const UserDashboard = () => {
                           </Badge>
                         </p>
                         <p><strong>Fecha:</strong> {format(new Date(searchResult.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</p>
-                        <p><strong>Total:</strong> ${searchResult.total_price.toFixed(2)}</p>
+                        <p><strong>Total:</strong> <span className="text-green-700 font-bold">${searchResult.total_price.toFixed(2)}</span></p>
                         <div>
                           <strong>Productos:</strong>
                           <ul className="mt-1 ml-4 space-y-1">
@@ -610,40 +657,42 @@ export const UserDashboard = () => {
             </Card>
 
             {/* Sección de Descargas */}
-            <Card>
-              <CardHeader>
+            <Card className="border-orange-200">
+              <CardHeader className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white rounded-t-lg">
                 <CardTitle className="flex items-center space-x-2">
                   <Download className="h-5 w-5" />
-                  <span>Descargas</span>
+                  <span>Descargas Recientes</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-6">
                 <p className="text-sm text-gray-600 mb-4">
                   Descarga las facturas de tus pedidos recientes
                 </p>
                 <div className="space-y-2">
                   {filteredOrders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
+                    <div key={order.id} className="flex items-center justify-between p-3 border border-orange-100 rounded hover:bg-orange-50 transition-colors">
                       <div className="flex-1">
-                        <p className="text-sm font-medium">#{order.id.substring(0, 8)}</p>
+                        <p className="text-sm font-medium text-gray-800">#{order.id.substring(0, 8)}</p>
                         <p className="text-xs text-gray-500">
-                          {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })} - ${order.total_price.toFixed(2)}
+                          {format(new Date(order.created_at), 'dd/MM/yyyy', { locale: es })} - 
+                          <span className="text-orange-600 font-medium ml-1">${order.total_price.toFixed(2)}</span>
                         </p>
                       </div>
                       <Button
                         onClick={() => generateInvoicePDF(order)}
                         variant="ghost"
                         size="sm"
-                        className="ml-2"
+                        className="ml-2 text-orange-600 hover:bg-orange-100"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
                     </div>
                   ))}
                   {filteredOrders.length === 0 && (
-                    <p className="text-center text-gray-500 text-sm py-4">
-                      No hay pedidos para mostrar
-                    </p>
+                    <div className="text-center text-gray-500 text-sm py-8">
+                      <Download className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                      <p>No hay pedidos para mostrar</p>
+                    </div>
                   )}
                 </div>
               </CardContent>
