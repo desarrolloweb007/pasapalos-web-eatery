@@ -32,6 +32,26 @@ const AdminDashboard = () => {
   // Estado para eliminar pedidos
   const [deletingOrder, setDeletingOrder] = useState<string | null>(null);
 
+  // Estado para la configuración de facturas
+  const [invoiceConfig, setInvoiceConfig] = useState({
+    nombre_restaurante: 'Casa de los Pasapalos',
+    nit: '900123456-7',
+    direccion: 'Calle 123 #45-67',
+    ciudad_pais: 'Bogotá, Colombia',
+    telefono: '+57 300 123 4567',
+    email: 'info@casapasapalos.com',
+    logo_url: '',
+    color_primario: '#3B82F6',
+    tipografia: 'Arial',
+    posicion_logo: 'izquierda',
+    mostrar_direccion: true,
+    mostrar_nombre_cliente: true,
+    mostrar_id_pedido: true,
+    mostrar_estado_pedido: true,
+    mostrar_fecha_hora: true,
+    mensaje_personalizado: 'Gracias por su compra',
+  });
+
   // Configurar realtime para pedidos
   useEffect(() => {
     if (!user) return;
@@ -422,8 +442,8 @@ const AdminDashboard = () => {
 
         <TabsContent value="invoices">
           <div className="grid gap-6 lg:grid-cols-2">
-            <InvoiceConfiguration userId={user.id} />
-            <InvoicePreview />
+            <InvoiceConfiguration onConfigChange={setInvoiceConfig} />
+            <InvoicePreview config={invoiceConfig} />
           </div>
         </TabsContent>
       </Tabs>

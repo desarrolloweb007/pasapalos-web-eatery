@@ -3,19 +3,63 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShoppingBag, Package, Users } from 'lucide-react';
 
+interface DatabaseOrder {
+  id: string;
+  customer_name: string;
+  user_id: string | null;
+  total_price: number;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  order_items: {
+    id: string;
+    quantity: number;
+    unit_price: number;
+    total_price: number;
+    products: {
+      name: string;
+    };
+  }[];
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  ingredients: string[];
+  category: string;
+  image_url?: string;
+  is_active: boolean;
+  is_featured: boolean;
+  rating: number;
+}
+
+interface UserProfile {
+  id: string;
+  full_name: string;
+  role_id: number;
+  roles?: {
+    name: string;
+  };
+}
+
 interface AdminStatsProps {
-  ordersCount: number;
-  productsCount: number;
-  usersCount: number;
-  totalSales: number;
+  orders: DatabaseOrder[];
+  products: Product[];
+  users: UserProfile[];
 }
 
 export const AdminStats: React.FC<AdminStatsProps> = ({
-  ordersCount,
-  productsCount,
-  usersCount,
-  totalSales
+  orders,
+  products,
+  users
 }) => {
+  const ordersCount = orders.length;
+  const productsCount = products.length;
+  const usersCount = users.length;
+  const totalSales = orders.reduce((sum, order) => sum + order.total_price, 0);
+
   const formatPrice = (price: number) => {
     if (typeof price !== 'number' || isNaN(price)) return '$0';
     return new Intl.NumberFormat('es-CO', {

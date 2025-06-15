@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -239,6 +238,8 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            
+            
             {/* Datos de la empresa */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Datos de la empresa</h3>
@@ -356,6 +357,8 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
               </div>
             </div>
 
+            
+            
             {/* Configuración visual */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Configuración visual</h3>

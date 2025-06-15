@@ -81,6 +81,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
 const CartContext = createContext<{
   items: CartItem[];
   total: number;
+  itemCount: number;
   addItem: (item: Omit<CartItem, 'quantity'>) => void;
   updateQuantity: (id: string, quantity: number) => void;
   removeItem: (id: string) => void;
@@ -91,6 +92,9 @@ const CART_STORAGE_KEY = 'casa-pasapalos-cart';
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(cartReducer, { items: [], total: 0 });
+
+  // Calcular el número total de items en el carrito
+  const itemCount = state.items.reduce((sum, item) => sum + item.quantity, 0);
 
   // Cargar carrito desde localStorage al inicializar
   useEffect(() => {
@@ -143,6 +147,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         items: state.items,
         total: state.total,
+        itemCount,
         addItem,
         updateQuantity,
         removeItem,
