@@ -14,8 +14,6 @@ interface Product {
   category: string;
   image_url?: string;
   is_active: boolean;
-  is_featured: boolean;
-  rating: number;
 }
 
 interface UserProfile {
@@ -135,48 +133,6 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
     }
   }, [userId, isAuthenticated]);
 
-  const deleteOrder = useCallback(async (orderId: string) => {
-    if (!userId || !isAuthenticated) return false;
-    
-    try {
-      console.log('Deleting order:', orderId);
-      
-      // First delete order items
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('order_id', orderId);
-
-      if (itemsError) throw itemsError;
-
-      // Then delete the order
-      const { error: orderError } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', orderId);
-
-      if (orderError) throw orderError;
-
-      // Update local state
-      setOrders(currentOrders => currentOrders.filter(order => order.id !== orderId));
-      
-      toast({
-        title: "Pedido eliminado",
-        description: "El pedido ha sido eliminado correctamente.",
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error deleting order:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar el pedido.",
-        variant: "destructive",
-      });
-      return false;
-    }
-  }, [userId, isAuthenticated]);
-
   const initializeData = useCallback(async () => {
     if (!userId || !isAuthenticated) {
       setLoading(false);
@@ -209,42 +165,25 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
     initializeData();
   }, [initializeData]);
 
-  // Set up realtime subscriptions
+  // Set up realtime subscription for products
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    console.log('Setting up realtime subscriptions...');
-
-    // Orders realtime subscription
-    const ordersChannel = supabase
-      .channel('orders-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'orders' }, 
-        (payload) => {
-          console.log('Orders changed:', payload);
-          fetchOrders();
-        }
-      )
-      .subscribe();
-
-    // Products realtime subscription  
-    const productsChannel = supabase
+    const channel = supabase
       .channel('products-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'products' }, 
-        (payload) => {
-          console.log('Products changed:', payload);
+        () => {
+          console.log('Products changed, refetching...');
           fetchProducts();
         }
       )
       .subscribe();
 
     return () => {
-      console.log('Cleaning up realtime subscriptions...');
-      supabase.removeChannel(ordersChannel);
-      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(channel);
     };
-  }, [isAuthenticated, fetchOrders, fetchProducts]);
+  }, [isAuthenticated, fetchProducts]);
 
   const refetchData = useCallback(() => {
     initializeData();
@@ -259,7 +198,6 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
     refetchData,
     fetchOrders,
     fetchProducts,
-    fetchUsers,
-    deleteOrder
+    fetchUsers
   };
 };

@@ -13,7 +13,6 @@ import Index from "./pages/Index";
 import Menu from "./pages/Menu";
 import Auth from "./pages/Auth";
 import AdminDashboard from "./pages/AdminDashboard";
-import InvoicingConfiguration from "./pages/InvoicingConfiguration";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
