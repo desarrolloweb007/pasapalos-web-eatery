@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,7 +89,7 @@ const AdminDashboard = () => {
     try {
       console.log('Deleting order:', orderId);
       
-      // First delete order items
+      // First delete order items to avoid foreign key constraints
       const { error: itemsError } = await supabase
         .from('order_items')
         .delete()
@@ -112,8 +113,12 @@ const AdminDashboard = () => {
 
       console.log('Order deleted successfully');
 
-      // Force refresh data
-      await refetchData();
+      // Force complete data refresh to update both orders list and stats
+      await Promise.all([
+        fetchOrders(),
+        fetchProducts(), 
+        fetchUsers()
+      ]);
 
       toast({
         title: "Pedido eliminado",
