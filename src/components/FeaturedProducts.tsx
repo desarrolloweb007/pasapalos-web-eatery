@@ -26,7 +26,13 @@ export const FeaturedProducts = () => {
 
       if (error) throw error;
       
-      setFeaturedProducts(data || []);
+      // Type assertion to ensure proper category types
+      const typedProducts = (data || []).map(product => ({
+        ...product,
+        category: product.category as 'comida_rapida' | 'especial' | 'extra' | 'bebida'
+      }));
+      
+      setFeaturedProducts(typedProducts);
     } catch (error) {
       console.error('Error fetching featured products:', error);
     } finally {

@@ -88,8 +88,14 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
 
       if (error) throw error;
       
-      console.log('Products fetched successfully:', data?.length || 0);
-      setProducts(data || []);
+      // Type assertion to ensure proper category types
+      const typedProducts = (data || []).map(product => ({
+        ...product,
+        category: product.category as 'comida_rapida' | 'especial' | 'extra' | 'bebida'
+      }));
+      
+      console.log('Products fetched successfully:', typedProducts.length);
+      setProducts(typedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
       setError('Error al cargar los productos');
