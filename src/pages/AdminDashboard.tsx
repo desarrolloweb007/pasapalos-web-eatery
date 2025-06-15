@@ -23,7 +23,7 @@ type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendi
 
 const AdminDashboard = () => {
   const { user, userProfile, loading: authLoading, initialized, isAuthenticated } = useAuth();
-  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id, isAuthenticated);
+  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers, fetchOrders } = useAdminData(user?.id, isAuthenticated);
   const [activeTab, setActiveTab] = useState('overview');
   const [editingProduct, setEditingProduct] = useState(null);
   const [invoiceConfig, setInvoiceConfig] = useState({
@@ -91,6 +91,9 @@ const AdminDashboard = () => {
         .eq('id', orderId);
 
       if (error) throw error;
+
+      // Refrescar tanto los pedidos como los datos completos para actualizar estadísticas
+      await Promise.all([fetchOrders(), refetchData()]);
 
       toast({
         title: "Pedido eliminado",
