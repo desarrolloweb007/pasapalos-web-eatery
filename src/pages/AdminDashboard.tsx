@@ -86,48 +86,36 @@ const AdminDashboard = () => {
     setDeletingOrderId(orderId);
 
     try {
-      console.log('🗑️ Starting order deletion for ID:', orderId);
+      console.log('🗑️ Eliminando pedido usando función de base de datos:', orderId);
       
-      // Step 1: Delete order items first (foreign key dependency)
-      console.log('📦 Deleting order items...');
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('order_id', orderId);
+      // Usar la función de base de datos para eliminar de manera segura
+      const { data, error } = await supabase.rpc('delete_order_safely', {
+        order_uuid: orderId
+      });
 
-      if (itemsError) {
-        console.error('❌ Error deleting order items:', itemsError);
-        throw new Error(`Error eliminando items del pedido: ${itemsError.message}`);
-      }
-      
-      console.log('✅ Order items deleted successfully');
-
-      // Step 2: Delete the main order
-      console.log('📋 Deleting main order...');
-      const { error: orderError } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', orderId);
-
-      if (orderError) {
-        console.error('❌ Error deleting order:', orderError);
-        throw new Error(`Error eliminando el pedido: ${orderError.message}`);
+      if (error) {
+        console.error('❌ Error en función delete_order_safely:', error);
+        throw new Error(`Error eliminando el pedido: ${error.message}`);
       }
 
-      console.log('✅ Order deleted successfully from database');
+      if (!data) {
+        throw new Error('No se pudo eliminar el pedido. Verifica que el pedido existe.');
+      }
 
-      // Step 3: Refresh data to update UI immediately
-      console.log('🔄 Refreshing dashboard data...');
+      console.log('✅ Pedido eliminado correctamente usando función de BD');
+
+      // Refrescar los datos para actualizar la UI inmediatamente
+      console.log('🔄 Actualizando lista de pedidos...');
       await refetchData();
 
-      console.log('🎉 Order deletion completed successfully');
+      console.log('🎉 Eliminación completada exitosamente');
 
       toast({
         title: "Pedido eliminado",
         description: "El pedido ha sido eliminado correctamente.",
       });
     } catch (error: any) {
-      console.error('💥 Error in order deletion process:', error);
+      console.error('💥 Error eliminando pedido:', error);
       toast({
         title: "Error al eliminar",
         description: error.message || "No se pudo eliminar el pedido. Inténtalo de nuevo.",

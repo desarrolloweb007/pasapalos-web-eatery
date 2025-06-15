@@ -363,6 +363,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_order_safely: {
+        Args: { order_uuid: string }
+        Returns: boolean
+      }
       has_role: {
         Args: { user_uuid: string; role_name: string }
         Returns: boolean
