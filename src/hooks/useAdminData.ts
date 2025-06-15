@@ -2,19 +2,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import type { Product } from '@/types/product';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
-  ingredients: string[];
-  category: string;
-  image_url?: string;
-  is_active: boolean;
-}
 
 interface UserProfile {
   id: string;
@@ -165,11 +155,22 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
     initializeData();
   }, [initializeData]);
 
-  // Set up realtime subscription for products
+  // Set up realtime subscription for orders and products
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const channel = supabase
+    const ordersChannel = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'orders' }, 
+        () => {
+          console.log('Orders changed, refetching...');
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    const productsChannel = supabase
       .channel('products-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'products' }, 
@@ -181,9 +182,10 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(ordersChannel);
+      supabase.removeChannel(productsChannel);
     };
-  }, [isAuthenticated, fetchProducts]);
+  }, [isAuthenticated, fetchOrders, fetchProducts]);
 
   const refetchData = useCallback(() => {
     initializeData();

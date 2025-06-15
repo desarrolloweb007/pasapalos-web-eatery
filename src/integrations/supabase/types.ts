@@ -133,8 +133,10 @@ export type Database = {
           image_url: string | null
           ingredients: string[] | null
           is_active: boolean | null
+          is_featured: boolean | null
           name: string
           price: number
+          rating: number | null
           updated_at: string | null
         }
         Insert: {
@@ -146,8 +148,10 @@ export type Database = {
           image_url?: string | null
           ingredients?: string[] | null
           is_active?: boolean | null
+          is_featured?: boolean | null
           name: string
           price: number
+          rating?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -159,8 +163,10 @@ export type Database = {
           image_url?: string | null
           ingredients?: string[] | null
           is_active?: boolean | null
+          is_featured?: boolean | null
           name?: string
           price?: number
+          rating?: number | null
           updated_at?: string | null
         }
         Relationships: []
