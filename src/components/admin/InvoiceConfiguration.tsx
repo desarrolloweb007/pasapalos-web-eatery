@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +45,6 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
   const [loading, setLoading] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>('');
-  const [existingConfigId, setExistingConfigId] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -88,15 +88,14 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
         .from('configuracion_factura')
         .select('*')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error loading configuration:', error);
         return;
       }
 
       if (data) {
-        setExistingConfigId(data.id);
         form.reset({
           nombre_restaurante: data.nombre_restaurante,
           nit: data.nit,
@@ -187,22 +186,11 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
         logo_url: logoUrl,
       };
 
-      let error;
-
-      if (existingConfigId) {
-        // Actualizar configuración existente
-        const { error: updateError } = await supabase
-          .from('configuracion_factura')
-          .update(configData)
-          .eq('id', existingConfigId);
-        error = updateError;
-      } else {
-        // Crear nueva configuración
-        const { error: insertError } = await supabase
-          .from('configuracion_factura')
-          .insert(configData);
-        error = insertError;
-      }
+      const { error } = await supabase
+        .from('configuracion_factura')
+        .upsert(configData, {
+          onConflict: 'user_id'
+        });
 
       if (error) throw error;
 
@@ -210,11 +198,6 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
         title: "Éxito",
         description: "Configuración guardada correctamente",
       });
-
-      // Recargar configuración para obtener el ID si es nueva
-      if (!existingConfigId) {
-        await loadConfiguration();
-      }
     } catch (error) {
       console.error('Error saving configuration:', error);
       toast({
@@ -238,8 +221,6 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            
-            
             {/* Datos de la empresa */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Datos de la empresa</h3>
@@ -357,8 +338,6 @@ export const InvoiceConfiguration: React.FC<InvoiceConfigurationProps> = ({ onCo
               </div>
             </div>
 
-            
-            
             {/* Configuración visual */}
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Configuración visual</h3>
