@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +15,7 @@ import { InvoiceConfiguration } from '@/components/admin/InvoiceConfiguration';
 import { InvoicePreview } from '@/components/admin/InvoicePreview';
 import { FeaturedProductsManager } from '@/components/admin/FeaturedProductsManager';
 import { OrderFilters } from '@/components/admin/OrderFilters';
+import { ProductEditDialog } from '@/components/admin/ProductEditDialog';
 import { useAdminData } from '@/hooks/useAdminData';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
@@ -25,6 +25,8 @@ const AdminDashboard = () => {
   const { user, userProfile, loading: authLoading, initialized, isAuthenticated } = useAuth();
   const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id, isAuthenticated);
   const [activeTab, setActiveTab] = useState('overview');
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [deletingOrder, setDeletingOrder] = useState(null);
   const [invoiceConfig, setInvoiceConfig] = useState({
     nombre_restaurante: '',
     nit: '',
@@ -82,7 +84,9 @@ const AdminDashboard = () => {
     if (!orderId) return;
 
     try {
+      setDeletingOrder(orderId);
       console.log('Deleting order:', orderId);
+      
       const { error } = await supabase
         .from('orders')
         .delete()
@@ -90,6 +94,9 @@ const AdminDashboard = () => {
 
       if (error) throw error;
 
+      // Refetch data to update the UI
+      await refetchData();
+      
       toast({
         title: "Pedido eliminado",
         description: "El pedido ha sido eliminado correctamente.",
@@ -101,6 +108,8 @@ const AdminDashboard = () => {
         description: "No se pudo eliminar el pedido.",
         variant: "destructive",
       });
+    } finally {
+      setDeletingOrder(null);
     }
   };
 
@@ -353,7 +362,11 @@ const AdminDashboard = () => {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => setEditingProduct(product)}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <AlertDialog>
@@ -445,8 +458,17 @@ const AdminDashboard = () => {
                             </div>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                                  <Trash2 className="h-4 w-4" />
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="text-destructive hover:text-destructive"
+                                  disabled={deletingOrder === order.id}
+                                >
+                                  {deletingOrder === order.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
@@ -561,6 +583,17 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {editingProduct && (
+          <ProductEditDialog
+            product={editingProduct}
+            onClose={() => setEditingProduct(null)}
+            onProductUpdated={() => {
+              fetchProducts();
+              setEditingProduct(null);
+            }}
+          />
+        )}
       </div>
     </div>
   );
