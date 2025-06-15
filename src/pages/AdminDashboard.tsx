@@ -1,24 +1,60 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/context/AuthContext';
 import { Edit, Trash2, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AdminStats } from '@/components/admin/AdminStats';
 import { ProductForm } from '@/components/admin/ProductForm';
+import { FeaturedProductControls } from '@/components/admin/FeaturedProductControls';
+import { OrderFilters } from '@/components/admin/OrderFilters';
 import { useAdminData } from '@/hooks/useAdminData';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
 
 const AdminDashboard = () => {
   const { user, userProfile, loading: authLoading, initialized, isAuthenticated } = useAuth();
-  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers } = useAdminData(user?.id, isAuthenticated);
+  const { orders, products, users, loading, error, refetchData, fetchProducts, fetchUsers, deleteOrder } = useAdminData(user?.id, isAuthenticated);
   const [activeTab, setActiveTab] = useState('overview');
+  
+  // Order filters state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showTodayOnly, setShowTodayOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  // Filter orders based on search criteria
+  const filteredOrders = useMemo(() => {
+    let filtered = orders;
+
+    // Filter by search term (customer name)
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(order => 
+        order.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filter by today only
+    if (showTodayOnly) {
+      const today = new Date().toDateString();
+      filtered = filtered.filter(order => 
+        new Date(order.created_at).toDateString() === today
+      );
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(order => order.status === statusFilter);
+    }
+
+    return filtered;
+  }, [orders, searchTerm, showTodayOnly, statusFilter]);
 
   const handleDeleteProduct = async (productId: string) => {
     if (!productId) return;
@@ -43,6 +79,17 @@ const AdminDashboard = () => {
       toast({
         title: "Error",
         description: "No se pudo eliminar el producto.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    const success = await deleteOrder(orderId);
+    if (!success) {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el pedido.",
         variant: "destructive",
       });
     }
@@ -215,38 +262,64 @@ const AdminDashboard = () => {
                   <div className="space-y-4 max-h-96 overflow-y-auto">
                     {activeProducts.length > 0 ? (
                       activeProducts.map((product) => (
-                        <div key={product.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4 flex-1">
-                            <img
-                              src={getImageUrl(product.image_url)}
-                              alt={product.name}
-                              className="w-12 h-12 object-cover rounded"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = '/placeholder.svg';
-                              }}
-                            />
-                            <div className="flex-1">
-                              <h4 className="font-medium">{product.name}</h4>
-                              <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
-                              <Badge variant="secondary" className="mt-1">
-                                {product.category}
-                              </Badge>
+                        <div key={product.id} className="space-y-4 p-4 border rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-1">
+                              <img
+                                src={getImageUrl(product.image_url)}
+                                alt={product.name}
+                                className="w-12 h-12 object-cover rounded"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = '/placeholder.svg';
+                                }}
+                              />
+                              <div className="flex-1">
+                                <h4 className="font-medium">{product.name}</h4>
+                                <p className="text-sm text-muted-foreground">{formatPrice(product.price)}</p>
+                                <Badge variant="secondary" className="mt-1">
+                                  {product.category}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Esta acción eliminará permanentemente el producto "{product.name}" del menú.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteProduct(product.id)}>
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                          
+                          <FeaturedProductControls
+                            productId={product.id}
+                            currentFeatured={product.is_featured || false}
+                            currentRating={product.rating || 0}
+                            onUpdate={fetchProducts}
+                          />
                         </div>
                       ))
                     ) : (
@@ -261,64 +334,104 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="orders">
-            <Card>
-              <CardHeader>
-                <CardTitle>Todos los Pedidos</CardTitle>
-                <CardDescription>
-                  Visualiza todos los pedidos realizados en la plataforma ({orders.length} total)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {orders.length > 0 ? (
-                    orders.map((order) => (
-                      <div key={order.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h4 className="font-medium">Pedido #{order.id.slice(0, 8)}</h4>
-                            <p className="text-sm text-muted-foreground">Cliente: {order.customer_name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {new Date(order.created_at).toLocaleString('es-CO')}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant={getStatusBadgeVariant(order.status)}>
-                              {order.status}
-                            </Badge>
-                            <p className="text-lg font-bold text-primary mt-1">
-                              {formatPrice(order.total_price)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Productos:</p>
-                          {order.order_items && order.order_items.length > 0 ? (
-                            order.order_items.map((item, index) => (
-                              <div key={index} className="text-sm text-muted-foreground flex justify-between">
-                                <span>{item.quantity}x {item.products?.name || 'Producto desconocido'}</span>
-                                <span>{formatPrice(item.total_price)}</span>
+            <div className="space-y-6">
+              <OrderFilters
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+                showTodayOnly={showTodayOnly}
+                onTodayFilterChange={setShowTodayOnly}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
+              />
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pedidos {showTodayOnly ? 'de Hoy' : 'Totales'}</CardTitle>
+                  <CardDescription>
+                    {filteredOrders.length} pedido(s) {searchTerm && `encontrado(s) para "${searchTerm}"`}
+                    {statusFilter !== 'all' && ` con estado "${statusFilter}"`}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {filteredOrders.length > 0 ? (
+                      filteredOrders.map((order) => (
+                        <div key={order.id} className="border rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h4 className="font-medium">Pedido #{order.id.slice(0, 8)}</h4>
+                              <p className="text-sm text-muted-foreground">Cliente: {order.customer_name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(order.created_at).toLocaleString('es-CO')}
+                              </p>
+                            </div>
+                            <div className="text-right flex flex-col gap-2">
+                              <div className="flex items-center gap-2">
+                                <Badge variant={getStatusBadgeVariant(order.status)}>
+                                  {order.status}
+                                </Badge>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="text-destructive">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>¿Eliminar pedido?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Esta acción eliminará permanentemente el pedido #{order.id.slice(0, 8)} de {order.customer_name}.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDeleteOrder(order.id)}>
+                                        Eliminar
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                               </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No hay items en este pedido</p>
+                              <p className="text-lg font-bold text-primary">
+                                {formatPrice(order.total_price)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Productos:</p>
+                            {order.order_items && order.order_items.length > 0 ? (
+                              order.order_items.map((item, index) => (
+                                <div key={index} className="text-sm text-muted-foreground flex justify-between">
+                                  <span>{item.quantity}x {item.products?.name || 'Producto desconocido'}</span>
+                                  <span>{formatPrice(item.total_price)}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No hay items en este pedido</p>
+                            )}
+                          </div>
+                          {order.notes && (
+                            <div className="mt-3 pt-3 border-t">
+                              <p className="text-sm font-medium">Notas:</p>
+                              <p className="text-sm text-muted-foreground">{order.notes}</p>
+                            </div>
                           )}
                         </div>
-                        {order.notes && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-sm font-medium">Notas:</p>
-                            <p className="text-sm text-muted-foreground">{order.notes}</p>
-                          </div>
-                        )}
+                      ))
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">
+                          {searchTerm || statusFilter !== 'all' || showTodayOnly 
+                            ? 'No se encontraron pedidos con los filtros aplicados.' 
+                            : 'No hay pedidos registrados.'
+                          }
+                        </p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">No hay pedidos registrados.</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="users">

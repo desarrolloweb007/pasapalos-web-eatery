@@ -2,64 +2,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Header } from '@/components/Header';
-import { useCart } from '@/context/CartContext';
-import { Star, Clock, Utensils, Heart } from 'lucide-react';
-
-// Sample menu items for the homepage
-const featuredItems = [
-  {
-    id: '1',
-    name: 'Arepa Reina Pepiada',
-    price: 4.50,
-    description: 'Deliciosa arepa rellena con pollo y aguacate',
-    image: '/placeholder.svg',
-    category: 'Especiales',
-    rating: 4.8,
-  },
-  {
-    id: '2',
-    name: 'Pepito de Pollo',
-    price: 6.00,
-    description: 'Pan francés con pollo, vegetales y salsas',
-    image: '/placeholder.svg',
-    category: 'Comidas Rápidas',
-    rating: 4.9,
-  },
-  {
-    id: '3',
-    name: 'Tequeños (6 unidades)',
-    price: 3.50,
-    description: 'Tequeños caseros crujientes con queso',
-    image: '/placeholder.svg',
-    category: 'Extras',
-    rating: 4.7,
-  },
-];
+import { Clock, Utensils, Heart } from 'lucide-react';
+import { FeaturedProducts } from '@/components/FeaturedProducts';
 
 const Index = () => {
-  const { addItem } = useCart();
-
-  const handleAddToCart = (item: typeof featuredItems[0]) => {
-    addItem({
-      id: item.id,
-      name: item.name,
-      price: item.price,
-      description: item.description,
-      image: item.image,
-    });
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-VE', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-    }).format(price);
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -137,42 +84,7 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {featuredItems.map((item) => (
-              <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300 animate-fade-in">
-                <div className="aspect-video bg-gradient-warm relative">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <Badge className="absolute top-3 left-3">
-                    {item.category}
-                  </Badge>
-                </div>
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold text-lg">{item.name}</h3>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-primary text-primary" />
-                      <span className="text-sm font-medium">{item.rating}</span>
-                    </div>
-                  </div>
-                  <p className="text-muted-foreground mb-4 text-sm">
-                    {item.description}
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-2xl font-bold text-primary">
-                      {formatPrice(item.price)}
-                    </span>
-                    <Button onClick={() => handleAddToCart(item)}>
-                      Agregar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <FeaturedProducts />
 
           <div className="text-center mt-12">
             <Button asChild size="lg" variant="outline">
