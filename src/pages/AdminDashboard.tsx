@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,10 @@ import { AdminStats } from '@/components/admin/AdminStats';
 import { ProductForm } from '@/components/admin/ProductForm';
 import { InvoiceConfiguration } from '@/components/admin/InvoiceConfiguration';
 import { InvoicePreview } from '@/components/admin/InvoicePreview';
+import { FeaturedProductsManager } from '@/components/admin/FeaturedProductsManager';
+import { OrderFilters } from '@/components/admin/OrderFilters';
 import { useAdminData } from '@/hooks/useAdminData';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 type OrderStatus = 'pendiente' | 'recibido' | 'en_espera' | 'cocinando' | 'pendiente_entrega' | 'entregado';
 
@@ -39,6 +43,13 @@ const AdminDashboard = () => {
     mensaje_personalizado: 'Gracias por su compra',
   });
 
+  // Order filters state
+  const [orderFilters, setOrderFilters] = useState({
+    search: '',
+    isToday: false,
+    month: null as number | null,
+  });
+
   const handleDeleteProduct = async (productId: string) => {
     if (!productId) return;
 
@@ -62,6 +73,32 @@ const AdminDashboard = () => {
       toast({
         title: "Error",
         description: "No se pudo eliminar el producto.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!orderId) return;
+
+    try {
+      console.log('Deleting order:', orderId);
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Pedido eliminado",
+        description: "El pedido ha sido eliminado correctamente.",
+      });
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el pedido.",
         variant: "destructive",
       });
     }
@@ -130,6 +167,66 @@ const AdminDashboard = () => {
     return `https://gezrpaubecdueuewdltq.supabase.co/storage/v1/object/public/product-images/${imageUrl}`;
   };
 
+  // Filter orders based on current filters
+  const filteredOrders = orders.filter(order => {
+    // Search filter
+    if (orderFilters.search) {
+      const searchLower = orderFilters.search.toLowerCase();
+      if (!order.customer_name.toLowerCase().includes(searchLower) && 
+          !order.id.toLowerCase().includes(searchLower)) {
+        return false;
+      }
+    }
+
+    // Today filter
+    if (orderFilters.isToday) {
+      const today = new Date();
+      const orderDate = new Date(order.created_at);
+      if (orderDate.toDateString() !== today.toDateString()) {
+        return false;
+      }
+    }
+
+    // Month filter
+    if (orderFilters.month !== null) {
+      const orderDate = new Date(order.created_at);
+      const currentYear = new Date().getFullYear();
+      if (orderDate.getMonth() !== orderFilters.month || orderDate.getFullYear() !== currentYear) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const handleSearchChange = (search: string) => {
+    setOrderFilters(prev => ({ ...prev, search }));
+  };
+
+  const handleTodayFilter = () => {
+    setOrderFilters(prev => ({ 
+      ...prev, 
+      isToday: !prev.isToday,
+      month: null // Clear month filter when activating today
+    }));
+  };
+
+  const handleMonthFilter = (month: number) => {
+    setOrderFilters(prev => ({ 
+      ...prev, 
+      month,
+      isToday: false // Clear today filter when selecting month
+    }));
+  };
+
+  const handleResetFilters = () => {
+    setOrderFilters({
+      search: '',
+      isToday: false,
+      month: null,
+    });
+  };
+
   // Show loading while auth is initializing
   if (!initialized || authLoading) {
     return (
@@ -194,16 +291,17 @@ const AdminDashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Panel de Administrador</h1>
-          <p className="text-mute-foreground">Bienvenido, {getUserDisplayName()}</p>
+          <p className="text-muted-foreground">Bienvenido, {getUserDisplayName()}</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Resumen</TabsTrigger>
             <TabsTrigger value="products">Productos</TabsTrigger>
+            <TabsTrigger value="featured">Destacados</TabsTrigger>
             <TabsTrigger value="orders">Pedidos</TabsTrigger>
             <TabsTrigger value="users">Usuarios</TabsTrigger>
-            <TabsTrigger value="billing">Configuración de facturación</TabsTrigger>
+            <TabsTrigger value="billing">Facturación</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -258,14 +356,34 @@ const AdminDashboard = () => {
                             <Button variant="outline" size="sm">
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleDeleteProduct(product.id)}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción desactivará el producto "{product.name}" del menú. ¿Estás seguro?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => handleDeleteProduct(product.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       ))
@@ -280,18 +398,33 @@ const AdminDashboard = () => {
             </div>
           </TabsContent>
 
+          <TabsContent value="featured">
+            <FeaturedProductsManager 
+              products={products}
+              onProductUpdate={fetchProducts}
+            />
+          </TabsContent>
+
           <TabsContent value="orders">
             <Card>
               <CardHeader>
-                <CardTitle>Todos los Pedidos</CardTitle>
+                <CardTitle>Gestión de Pedidos</CardTitle>
                 <CardDescription>
-                  Visualiza todos los pedidos realizados en la plataforma ({orders.length} total)
+                  Visualiza y gestiona todos los pedidos ({orders.length} total, {filteredOrders.length} mostrados)
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                <OrderFilters
+                  onSearchChange={handleSearchChange}
+                  onTodayFilter={handleTodayFilter}
+                  onMonthFilter={handleMonthFilter}
+                  onResetFilters={handleResetFilters}
+                  activeFilters={orderFilters}
+                />
+                
                 <div className="space-y-4">
-                  {orders.length > 0 ? (
-                    orders.map((order) => (
+                  {filteredOrders.length > 0 ? (
+                    filteredOrders.map((order) => (
                       <div key={order.id} className="border rounded-lg p-4">
                         <div className="flex justify-between items-start mb-3">
                           <div>
@@ -301,13 +434,39 @@ const AdminDashboard = () => {
                               {new Date(order.created_at).toLocaleString('es-CO')}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <Badge variant={getStatusBadgeVariant(order.status)}>
-                              {order.status}
-                            </Badge>
-                            <p className="text-lg font-bold text-primary mt-1">
-                              {formatPrice(order.total_price)}
-                            </p>
+                          <div className="text-right flex items-center gap-2">
+                            <div>
+                              <Badge variant={getStatusBadgeVariant(order.status)}>
+                                {order.status}
+                              </Badge>
+                              <p className="text-lg font-bold text-primary mt-1">
+                                {formatPrice(order.total_price)}
+                              </p>
+                            </div>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Eliminar pedido?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta acción eliminará permanentemente el pedido #{order.id.slice(0, 8)} de {order.customer_name}. ¿Estás seguro?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => handleDeleteOrder(order.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                         <div className="space-y-2">
@@ -333,7 +492,12 @@ const AdminDashboard = () => {
                     ))
                   ) : (
                     <div className="text-center py-8">
-                      <p className="text-muted-foreground">No hay pedidos registrados.</p>
+                      <p className="text-muted-foreground">
+                        {orderFilters.search || orderFilters.isToday || orderFilters.month !== null
+                          ? 'No se encontraron pedidos con los filtros aplicados.'
+                          : 'No hay pedidos registrados.'
+                        }
+                      </p>
                     </div>
                   )}
                 </div>

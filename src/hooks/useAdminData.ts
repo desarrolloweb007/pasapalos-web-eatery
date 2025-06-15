@@ -14,6 +14,8 @@ interface Product {
   category: string;
   image_url?: string;
   is_active: boolean;
+  is_featured?: boolean;
+  rating?: number;
 }
 
 interface UserProfile {
@@ -164,6 +166,26 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
   useEffect(() => {
     initializeData();
   }, [initializeData]);
+
+  // Set up realtime subscription for orders
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const channel = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'orders' }, 
+        () => {
+          console.log('Orders changed, refetching...');
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, fetchOrders]);
 
   // Set up realtime subscription for products
   useEffect(() => {
