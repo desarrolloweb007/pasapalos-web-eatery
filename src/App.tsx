@@ -13,6 +13,7 @@ import Index from "./pages/Index";
 import Menu from "./pages/Menu";
 import Auth from "./pages/Auth";
 import AdminDashboard from "./pages/AdminDashboard";
+import UserDashboard from "./pages/UserDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -77,9 +78,7 @@ const App = () => (
                 path="/usuario" 
                 element={
                   <ProtectedRoute allowedRoles={['usuario']}>
-                    <div className="min-h-screen flex items-center justify-center">
-                      <h1 className="text-2xl font-bold">Panel del Usuario - En construcción</h1>
-                    </div>
+                    <UserDashboard />
                   </ProtectedRoute>
                 } 
               />
