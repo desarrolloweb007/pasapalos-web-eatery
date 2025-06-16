@@ -100,14 +100,39 @@ export const UserFacturacion = () => {
 
   const fetchInvoiceConfig = async (): Promise<InvoiceConfig | null> => {
     try {
+      // Usar maybeSingle() en lugar de single() para evitar errores cuando no hay datos
       const { data, error } = await supabase
         .from('configuracion_factura')
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching invoice config:', error);
         return null;
+      }
+
+      // Si no hay datos, retornar configuración por defecto
+      if (!data) {
+        console.log('No invoice configuration found, using defaults');
+        return {
+          id: '',
+          nombre_restaurante: 'Casa de los Pasapalos',
+          nit: '',
+          direccion: '',
+          ciudad_pais: '',
+          telefono: '',
+          email: '',
+          logo_url: '',
+          color_primario: '#F97316',
+          tipografia: 'Arial',
+          posicion_logo: 'izquierda',
+          mensaje_personalizado: 'Gracias por su compra',
+          mostrar_direccion: true,
+          mostrar_id_pedido: true,
+          mostrar_nombre_cliente: true,
+          mostrar_estado_pedido: true,
+          mostrar_fecha_hora: true,
+        };
       }
 
       return data;
@@ -125,7 +150,7 @@ export const UserFacturacion = () => {
       if (!invoiceConfig) {
         toast({
           title: "Error de configuración",
-          description: "No se encontró la configuración de facturación",
+          description: "No se pudo cargar la configuración de facturación. Se usarán valores por defecto.",
           variant: "destructive",
         });
         return;
@@ -140,8 +165,8 @@ export const UserFacturacion = () => {
       
       // Título con nombre del restaurante
       doc.setFontSize(20);
-      doc.setTextColor(invoiceConfig.color_primario || '#000000');
-      doc.text(invoiceConfig.nombre_restaurante || 'Restaurante', 20, yPosition);
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.text(invoiceConfig.nombre_restaurante || 'Casa de los Pasapalos', 20, yPosition);
       yPosition += 15;
       
       // Datos del restaurante (solo si mostrar_direccion está habilitado)
@@ -175,7 +200,7 @@ export const UserFacturacion = () => {
       
       // Título de factura
       doc.setFontSize(14);
-      doc.setTextColor(invoiceConfig.color_primario || '#000000');
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
       doc.text('FACTURA ELECTRÓNICA', 20, yPosition);
       yPosition += 10;
       
@@ -210,7 +235,7 @@ export const UserFacturacion = () => {
       
       // Tabla de productos
       doc.setFontSize(12);
-      doc.setTextColor(invoiceConfig.color_primario || '#000000');
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
       doc.text('PRODUCTOS:', 20, yPosition);
       yPosition += 8;
       
@@ -243,7 +268,7 @@ export const UserFacturacion = () => {
       
       // Total
       doc.setFontSize(12);
-      doc.setTextColor(invoiceConfig.color_primario || '#000000');
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
       doc.text(`TOTAL: $${order.total_price.toFixed(2)}`, 130, yPosition);
       yPosition += 20;
       
