@@ -53,33 +53,10 @@ export const UserFacturacion = () => {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [invoiceConfig, setInvoiceConfig] = useState<InvoiceConfig | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchOrders();
-      fetchInvoiceConfig();
-      
-      // Setup realtime subscription for invoice configuration
-      const channel = supabase
-        .channel('configuracion_factura_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'configuracion_factura'
-          },
-          () => {
-            console.log('Invoice configuration updated, refetching...');
-            fetchInvoiceConfig();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
     }
   }, [user]);
 
@@ -121,224 +98,188 @@ export const UserFacturacion = () => {
     }
   };
 
-  const fetchInvoiceConfig = async () => {
+  const fetchInvoiceConfig = async (): Promise<InvoiceConfig | null> => {
     try {
-      console.log('Fetching invoice configuration...');
+      // Usar maybeSingle() en lugar de single() para evitar errores cuando no hay datos
       const { data, error } = await supabase
         .from('configuracion_factura')
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching invoice config:', error);
-        setInvoiceConfig(null);
-        return;
+        return null;
       }
 
+      // Si no hay datos, retornar configuración por defecto
       if (!data) {
-        console.log('No invoice configuration found in database');
-        setInvoiceConfig(null);
-        return;
+        console.log('No invoice configuration found, using defaults');
+        return {
+          id: '',
+          nombre_restaurante: 'Casa de los Pasapalos',
+          nit: '',
+          direccion: '',
+          ciudad_pais: '',
+          telefono: '',
+          email: '',
+          logo_url: '',
+          color_primario: '#F97316',
+          tipografia: 'Arial',
+          posicion_logo: 'izquierda',
+          mensaje_personalizado: 'Gracias por su compra',
+          mostrar_direccion: true,
+          mostrar_id_pedido: true,
+          mostrar_nombre_cliente: true,
+          mostrar_estado_pedido: true,
+          mostrar_fecha_hora: true,
+        };
       }
 
-      console.log('Invoice configuration loaded:', data);
-      setInvoiceConfig(data);
+      return data;
     } catch (error) {
       console.error('Error fetching invoice config:', error);
-      setInvoiceConfig(null);
+      return null;
     }
   };
 
   const generateInvoicePDF = async (order: Order) => {
     try {
+      // Obtener configuración de factura
+      const invoiceConfig = await fetchInvoiceConfig();
+      
       if (!invoiceConfig) {
         toast({
           title: "Error de configuración",
-          description: "No se encontró la configuración de facturación. Contacta al administrador.",
+          description: "No se pudo cargar la configuración de facturación. Se usarán valores por defecto.",
           variant: "destructive",
         });
         return;
       }
 
-      console.log('Generating PDF with config:', invoiceConfig);
-
       const doc = new jsPDF();
       
-      // Convert hex color to RGB for jsPDF
-      const hexToRgb = (hex: string) => {
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16)
-        } : { r: 59, g: 130, b: 246 };
-      };
-
-      const primaryColor = hexToRgb(invoiceConfig.color_primario);
+      // Configurar fuente según configuración
+      doc.setFont('helvetica');
       
       let yPosition = 20;
       
-      // Header with restaurant name - Receipt style
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(primaryColor.r, primaryColor.g, primaryColor.b);
+      // Título con nombre del restaurante
+      doc.setFontSize(20);
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.text(invoiceConfig.nombre_restaurante || 'Casa de los Pasapalos', 20, yPosition);
+      yPosition += 15;
       
-      // Center the restaurant name
-      const pageWidth = doc.internal.pageSize.width;
-      const textWidth = doc.getTextWidth(invoiceConfig.nombre_restaurante);
-      const xPosition = (pageWidth - textWidth) / 2;
-      doc.text(invoiceConfig.nombre_restaurante, xPosition, yPosition);
-      yPosition += 12;
-      
-      // Restaurant information (centered, receipt style)
+      // Datos del restaurante (solo si mostrar_direccion está habilitado)
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
       doc.setTextColor(0, 0, 0);
       
       if (invoiceConfig.mostrar_direccion) {
         if (invoiceConfig.nit) {
-          const nitText = `NIT: ${invoiceConfig.nit}`;
-          const nitWidth = doc.getTextWidth(nitText);
-          doc.text(nitText, (pageWidth - nitWidth) / 2, yPosition);
+          doc.text(`NIT: ${invoiceConfig.nit}`, 20, yPosition);
           yPosition += 5;
         }
-        
         if (invoiceConfig.direccion) {
-          const addressWidth = doc.getTextWidth(invoiceConfig.direccion);
-          doc.text(invoiceConfig.direccion, (pageWidth - addressWidth) / 2, yPosition);
+          doc.text(`Dirección: ${invoiceConfig.direccion}`, 20, yPosition);
           yPosition += 5;
         }
-        
         if (invoiceConfig.ciudad_pais) {
-          const cityWidth = doc.getTextWidth(invoiceConfig.ciudad_pais);
-          doc.text(invoiceConfig.ciudad_pais, (pageWidth - cityWidth) / 2, yPosition);
+          doc.text(`${invoiceConfig.ciudad_pais}`, 20, yPosition);
           yPosition += 5;
         }
-        
         if (invoiceConfig.telefono) {
-          const phoneText = `Tel: ${invoiceConfig.telefono}`;
-          const phoneWidth = doc.getTextWidth(phoneText);
-          doc.text(phoneText, (pageWidth - phoneWidth) / 2, yPosition);
+          doc.text(`Tel: ${invoiceConfig.telefono}`, 20, yPosition);
           yPosition += 5;
         }
-        
         if (invoiceConfig.email) {
-          const emailWidth = doc.getTextWidth(invoiceConfig.email);
-          doc.text(invoiceConfig.email, (pageWidth - emailWidth) / 2, yPosition);
+          doc.text(`Email: ${invoiceConfig.email}`, 20, yPosition);
           yPosition += 5;
         }
       }
       
       yPosition += 10;
       
-      // Separator line
-      doc.setLineWidth(0.5);
-      doc.line(20, yPosition, pageWidth - 20, yPosition);
-      yPosition += 8;
-      
-      // Invoice title
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(primaryColor.r, primaryColor.g, primaryColor.b);
-      const invoiceTitle = 'FACTURA ELECTRÓNICA';
-      const titleWidth = doc.getTextWidth(invoiceTitle);
-      doc.text(invoiceTitle, (pageWidth - titleWidth) / 2, yPosition);
+      // Título de factura
+      doc.setFontSize(14);
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.text('FACTURA ELECTRÓNICA', 20, yPosition);
       yPosition += 10;
       
-      // Order details
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
+      // Datos del pedido
+      doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
       
       if (invoiceConfig.mostrar_id_pedido) {
-        doc.text(`Pedido: #${order.id.substring(0, 8)}`, 20, yPosition);
-        yPosition += 4;
+        doc.text(`ID Pedido: #${order.id.substring(0, 8)}`, 20, yPosition);
+        yPosition += 5;
       }
       
       if (invoiceConfig.mostrar_nombre_cliente) {
         doc.text(`Cliente: ${order.customer_name}`, 20, yPosition);
-        yPosition += 4;
+        yPosition += 5;
       }
       
       if (invoiceConfig.mostrar_fecha_hora) {
         const date = new Date(order.created_at);
-        doc.text(`Fecha: ${format(date, 'dd/MM/yyyy HH:mm:ss', { locale: es })}`, 20, yPosition);
-        yPosition += 4;
+        doc.text(`Fecha: ${format(date, 'dd/MM/yyyy', { locale: es })}`, 20, yPosition);
+        yPosition += 5;
+        doc.text(`Hora: ${format(date, 'HH:mm:ss', { locale: es })}`, 20, yPosition);
+        yPosition += 5;
       }
       
       if (invoiceConfig.mostrar_estado_pedido) {
         doc.text(`Estado: ${order.status}`, 20, yPosition);
-        yPosition += 4;
+        yPosition += 5;
       }
       
-      yPosition += 6;
+      yPosition += 10;
       
-      // Another separator line
-      doc.line(20, yPosition, pageWidth - 20, yPosition);
+      // Tabla de productos
+      doc.setFontSize(12);
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.text('PRODUCTOS:', 20, yPosition);
       yPosition += 8;
       
-      // Products header
+      // Headers de tabla
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('PRODUCTOS', 20, yPosition);
-      yPosition += 6;
+      doc.setTextColor(0, 0, 0);
+      doc.text('Producto', 20, yPosition);
+      doc.text('Cant.', 100, yPosition);
+      doc.text('Precio Unit.', 130, yPosition);
+      doc.text('Subtotal', 170, yPosition);
+      yPosition += 3;
       
-      // Products table headers
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Cant.', 20, yPosition);
-      doc.text('Producto', 35, yPosition);
-      doc.text('P.Unit', 130, yPosition);
-      doc.text('Total', 160, yPosition);
-      yPosition += 4;
+      // Línea divisoria
+      doc.line(20, yPosition, 190, yPosition);
+      yPosition += 5;
       
-      // Line under headers
-      doc.setLineWidth(0.3);
-      doc.line(20, yPosition, pageWidth - 20, yPosition);
-      yPosition += 6;
-      
-      // Products list
+      // Items del pedido
       order.order_items.forEach(item => {
-        doc.text(item.quantity.toString(), 20, yPosition);
-        
-        // Truncate product name if too long
-        let productName = item.products.name;
-        if (productName.length > 35) {
-          productName = productName.substring(0, 32) + '...';
-        }
-        doc.text(productName, 35, yPosition);
-        
-        doc.text(`$${item.unit_price.toFixed(0)}`, 130, yPosition);
-        doc.text(`$${item.total_price.toFixed(0)}`, 160, yPosition);
+        doc.text(item.products.name, 20, yPosition);
+        doc.text(item.quantity.toString(), 100, yPosition);
+        doc.text(`$${item.unit_price.toFixed(2)}`, 130, yPosition);
+        doc.text(`$${item.total_price.toFixed(2)}`, 170, yPosition);
         yPosition += 5;
       });
       
-      yPosition += 4;
-      
-      // Total separator line
-      doc.setLineWidth(0.5);
-      doc.line(20, yPosition, pageWidth - 20, yPosition);
+      // Línea divisoria
+      yPosition += 2;
+      doc.line(20, yPosition, 190, yPosition);
       yPosition += 8;
       
       // Total
       doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(primaryColor.r, primaryColor.g, primaryColor.b);
-      const totalText = `TOTAL: $${order.total_price.toFixed(0)}`;
-      const totalWidth = doc.getTextWidth(totalText);
-      doc.text(totalText, (pageWidth - totalWidth) / 2, yPosition);
-      yPosition += 15;
+      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.text(`TOTAL: $${order.total_price.toFixed(2)}`, 130, yPosition);
+      yPosition += 20;
       
-      // Custom message
+      // Mensaje personalizado
       if (invoiceConfig.mensaje_personalizado) {
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
-        const messageWidth = doc.getTextWidth(invoiceConfig.mensaje_personalizado);
-        doc.text(invoiceConfig.mensaje_personalizado, (pageWidth - messageWidth) / 2, yPosition);
+        doc.text(invoiceConfig.mensaje_personalizado, 20, yPosition);
       }
       
-      // Save PDF
+      // Guardar PDF
       const fileName = `factura-${order.id.substring(0, 8)}.pdf`;
       doc.save(fileName);
       
@@ -380,14 +321,6 @@ export const UserFacturacion = () => {
             Las facturas incluyen toda la información configurada por el restaurante.
           </p>
           
-          {!invoiceConfig && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-              <p className="text-yellow-800 text-sm">
-                ⚠️ No se encontró configuración de facturación. Las facturas podrían no generarse correctamente.
-              </p>
-            </div>
-          )}
-          
           {orders.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <FileText className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -424,7 +357,6 @@ export const UserFacturacion = () => {
                     onClick={() => generateInvoicePDF(order)}
                     variant="outline"
                     className="ml-4 border-orange-300 text-orange-600 hover:bg-orange-50"
-                    disabled={!invoiceConfig}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Descargar Factura
