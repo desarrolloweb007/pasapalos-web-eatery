@@ -52,13 +52,11 @@ export const UserFacturacion = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [invoiceConfig, setInvoiceConfig] = useState<InvoiceConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
       fetchOrders();
-      fetchInvoiceConfig();
     }
   }, [user]);
 
@@ -90,88 +88,101 @@ export const UserFacturacion = () => {
       setOrders(data || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los pedidos",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchInvoiceConfig = async () => {
+  const fetchInvoiceConfig = async (): Promise<InvoiceConfig | null> => {
     try {
       const { data, error } = await supabase
         .from('configuracion_factura')
         .select('*')
-        .limit(1)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error fetching invoice config:', error);
-        return;
+        return null;
       }
 
-      if (data) {
-        setInvoiceConfig(data);
-      }
+      return data;
     } catch (error) {
       console.error('Error fetching invoice config:', error);
+      return null;
     }
   };
 
-  const generateInvoicePDF = (order: Order) => {
-    if (!invoiceConfig) {
-      toast({
-        title: "Error de configuración",
-        description: "No se encontró la configuración de facturación. Contacta al administrador.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const generateInvoicePDF = async (order: Order) => {
     try {
+      // Obtener configuración de factura
+      const invoiceConfig = await fetchInvoiceConfig();
+      
+      if (!invoiceConfig) {
+        toast({
+          title: "Error de configuración",
+          description: "No se encontró la configuración de facturación",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const doc = new jsPDF();
       
-      // Configurar fuente
+      // Configurar fuente según configuración
       doc.setFont('helvetica');
       
-      // Header con datos del restaurante
       let yPosition = 20;
       
-      // Título
+      // Título con nombre del restaurante
       doc.setFontSize(20);
-      doc.setTextColor(invoiceConfig.color_primario);
-      doc.text(invoiceConfig.nombre_restaurante || 'Casa de los Pasapalos', 20, yPosition);
-      yPosition += 10;
+      doc.setTextColor(invoiceConfig.color_primario || '#000000');
+      doc.text(invoiceConfig.nombre_restaurante || 'Restaurante', 20, yPosition);
+      yPosition += 15;
       
-      // Datos del restaurante
+      // Datos del restaurante (solo si mostrar_direccion está habilitado)
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
-      if (invoiceConfig.mostrar_direccion && invoiceConfig.nit) {
-        doc.text(`NIT: ${invoiceConfig.nit}`, 20, yPosition);
-        yPosition += 5;
+      
+      if (invoiceConfig.mostrar_direccion) {
+        if (invoiceConfig.nit) {
+          doc.text(`NIT: ${invoiceConfig.nit}`, 20, yPosition);
+          yPosition += 5;
+        }
+        if (invoiceConfig.direccion) {
+          doc.text(`Dirección: ${invoiceConfig.direccion}`, 20, yPosition);
+          yPosition += 5;
+        }
+        if (invoiceConfig.ciudad_pais) {
+          doc.text(`${invoiceConfig.ciudad_pais}`, 20, yPosition);
+          yPosition += 5;
+        }
+        if (invoiceConfig.telefono) {
+          doc.text(`Tel: ${invoiceConfig.telefono}`, 20, yPosition);
+          yPosition += 5;
+        }
+        if (invoiceConfig.email) {
+          doc.text(`Email: ${invoiceConfig.email}`, 20, yPosition);
+          yPosition += 5;
+        }
       }
-      if (invoiceConfig.mostrar_direccion && invoiceConfig.direccion) {
-        doc.text(`Dirección: ${invoiceConfig.direccion}`, 20, yPosition);
-        yPosition += 5;
-      }
-      if (invoiceConfig.mostrar_direccion && invoiceConfig.ciudad_pais) {
-        doc.text(`${invoiceConfig.ciudad_pais}`, 20, yPosition);
-        yPosition += 5;
-      }
-      if (invoiceConfig.mostrar_direccion && invoiceConfig.telefono) {
-        doc.text(`Tel: ${invoiceConfig.telefono}`, 20, yPosition);
-        yPosition += 5;
-      }
-      if (invoiceConfig.mostrar_direccion && invoiceConfig.email) {
-        doc.text(`Email: ${invoiceConfig.email}`, 20, yPosition);
-        yPosition += 5;
-      }
+      
       yPosition += 10;
       
-      // Datos del pedido
+      // Título de factura
       doc.setFontSize(14);
+      doc.setTextColor(invoiceConfig.color_primario || '#000000');
       doc.text('FACTURA ELECTRÓNICA', 20, yPosition);
       yPosition += 10;
       
+      // Datos del pedido
       doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      
       if (invoiceConfig.mostrar_id_pedido) {
         doc.text(`ID Pedido: #${order.id.substring(0, 8)}`, 20, yPosition);
         yPosition += 5;
@@ -194,24 +205,29 @@ export const UserFacturacion = () => {
         doc.text(`Estado: ${order.status}`, 20, yPosition);
         yPosition += 5;
       }
-      yPosition += 5;
+      
+      yPosition += 10;
       
       // Tabla de productos
+      doc.setFontSize(12);
+      doc.setTextColor(invoiceConfig.color_primario || '#000000');
       doc.text('PRODUCTOS:', 20, yPosition);
-      yPosition += 5;
+      yPosition += 8;
       
       // Headers de tabla
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
       doc.text('Producto', 20, yPosition);
       doc.text('Cant.', 100, yPosition);
       doc.text('Precio Unit.', 130, yPosition);
       doc.text('Subtotal', 170, yPosition);
-      yPosition += 5;
+      yPosition += 3;
       
-      // Línea
+      // Línea divisoria
       doc.line(20, yPosition, 190, yPosition);
       yPosition += 5;
       
-      // Productos
+      // Items del pedido
       order.order_items.forEach(item => {
         doc.text(item.products.name, 20, yPosition);
         doc.text(item.quantity.toString(), 100, yPosition);
@@ -220,33 +236,38 @@ export const UserFacturacion = () => {
         yPosition += 5;
       });
       
-      // Línea
+      // Línea divisoria
+      yPosition += 2;
       doc.line(20, yPosition, 190, yPosition);
-      yPosition += 5;
+      yPosition += 8;
       
       // Total
       doc.setFontSize(12);
+      doc.setTextColor(invoiceConfig.color_primario || '#000000');
       doc.text(`TOTAL: $${order.total_price.toFixed(2)}`, 130, yPosition);
-      yPosition += 15;
+      yPosition += 20;
       
       // Mensaje personalizado
       if (invoiceConfig.mensaje_personalizado) {
         doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
         doc.text(invoiceConfig.mensaje_personalizado, 20, yPosition);
       }
       
       // Guardar PDF
-      doc.save(`factura-${order.id.substring(0, 8)}.pdf`);
+      const fileName = `factura-${order.id.substring(0, 8)}.pdf`;
+      doc.save(fileName);
       
       toast({
         title: "¡Factura generada!",
-        description: "La factura se ha descargado correctamente",
+        description: `La factura ${fileName} se ha descargado correctamente`,
       });
+      
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
         title: "Error",
-        description: "Error al generar la factura",
+        description: "Error al generar la factura. Inténtalo de nuevo.",
         variant: "destructive",
       });
     }
@@ -272,7 +293,7 @@ export const UserFacturacion = () => {
         <CardContent>
           <p className="text-gray-600 mb-6">
             Descarga las facturas electrónicas de todos tus pedidos. 
-            Las facturas incluyen toda la información necesaria según la configuración del restaurante.
+            Las facturas incluyen toda la información configurada por el restaurante.
           </p>
           
           {orders.length === 0 ? (
@@ -321,35 +342,6 @@ export const UserFacturacion = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Invoice Configuration Info */}
-      {invoiceConfig && (
-        <Card className="bg-orange-50 border-orange-200">
-          <CardHeader>
-            <CardTitle className="text-orange-800">Configuración de Facturación</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-orange-700 font-medium">Restaurante:</span>
-                <p className="text-orange-600">{invoiceConfig.nombre_restaurante}</p>
-              </div>
-              <div>
-                <span className="text-orange-700 font-medium">NIT:</span>
-                <p className="text-orange-600">{invoiceConfig.nit}</p>
-              </div>
-              <div>
-                <span className="text-orange-700 font-medium">Email:</span>
-                <p className="text-orange-600">{invoiceConfig.email}</p>
-              </div>
-              <div>
-                <span className="text-orange-700 font-medium">Teléfono:</span>
-                <p className="text-orange-600">{invoiceConfig.telefono}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };
