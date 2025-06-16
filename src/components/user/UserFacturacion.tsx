@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -100,7 +99,7 @@ export const UserFacturacion = () => {
 
   const fetchInvoiceConfig = async (): Promise<InvoiceConfig | null> => {
     try {
-      // Usar maybeSingle() en lugar de single() para evitar errores cuando no hay datos
+      console.log('Fetching invoice configuration...');
       const { data, error } = await supabase
         .from('configuracion_factura')
         .select('*')
@@ -111,30 +110,12 @@ export const UserFacturacion = () => {
         return null;
       }
 
-      // Si no hay datos, retornar configuración por defecto
       if (!data) {
-        console.log('No invoice configuration found, using defaults');
-        return {
-          id: '',
-          nombre_restaurante: 'Casa de los Pasapalos',
-          nit: '',
-          direccion: '',
-          ciudad_pais: '',
-          telefono: '',
-          email: '',
-          logo_url: '',
-          color_primario: '#F97316',
-          tipografia: 'Arial',
-          posicion_logo: 'izquierda',
-          mensaje_personalizado: 'Gracias por su compra',
-          mostrar_direccion: true,
-          mostrar_id_pedido: true,
-          mostrar_nombre_cliente: true,
-          mostrar_estado_pedido: true,
-          mostrar_fecha_hora: true,
-        };
+        console.log('No invoice configuration found in database');
+        return null;
       }
 
+      console.log('Invoice configuration loaded:', data);
       return data;
     } catch (error) {
       console.error('Error fetching invoice config:', error);
@@ -150,11 +131,13 @@ export const UserFacturacion = () => {
       if (!invoiceConfig) {
         toast({
           title: "Error de configuración",
-          description: "No se pudo cargar la configuración de facturación. Se usarán valores por defecto.",
+          description: "No se encontró la configuración de facturación. Contacta al administrador.",
           variant: "destructive",
         });
         return;
       }
+
+      console.log('Generating PDF with config:', invoiceConfig);
 
       const doc = new jsPDF();
       
@@ -165,8 +148,8 @@ export const UserFacturacion = () => {
       
       // Título con nombre del restaurante
       doc.setFontSize(20);
-      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
-      doc.text(invoiceConfig.nombre_restaurante || 'Casa de los Pasapalos', 20, yPosition);
+      doc.setTextColor(invoiceConfig.color_primario);
+      doc.text(invoiceConfig.nombre_restaurante, 20, yPosition);
       yPosition += 15;
       
       // Datos del restaurante (solo si mostrar_direccion está habilitado)
@@ -200,7 +183,7 @@ export const UserFacturacion = () => {
       
       // Título de factura
       doc.setFontSize(14);
-      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.setTextColor(invoiceConfig.color_primario);
       doc.text('FACTURA ELECTRÓNICA', 20, yPosition);
       yPosition += 10;
       
@@ -235,7 +218,7 @@ export const UserFacturacion = () => {
       
       // Tabla de productos
       doc.setFontSize(12);
-      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.setTextColor(invoiceConfig.color_primario);
       doc.text('PRODUCTOS:', 20, yPosition);
       yPosition += 8;
       
@@ -268,7 +251,7 @@ export const UserFacturacion = () => {
       
       // Total
       doc.setFontSize(12);
-      doc.setTextColor(invoiceConfig.color_primario || '#F97316');
+      doc.setTextColor(invoiceConfig.color_primario);
       doc.text(`TOTAL: $${order.total_price.toFixed(2)}`, 130, yPosition);
       yPosition += 20;
       
