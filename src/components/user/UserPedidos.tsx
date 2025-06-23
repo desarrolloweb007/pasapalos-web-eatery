@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,12 +37,21 @@ export const UserPedidos = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     if (user) {
       fetchUserOrders();
       setupRealtimeSubscription();
     }
+
+    // Cleanup function
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
   }, [user]);
 
   useEffect(() => {
@@ -90,8 +98,15 @@ export const UserPedidos = () => {
   };
 
   const setupRealtimeSubscription = () => {
+    // Clean up existing channel if it exists
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    // Create new channel
     const channel = supabase
-      .channel('user-orders-changes')
+      .channel(`user-orders-${user?.id}`)
       .on(
         'postgres_changes',
         {
@@ -101,14 +116,13 @@ export const UserPedidos = () => {
           filter: `user_id=eq.${user?.id}`
         },
         () => {
+          console.log('Order change detected, refetching...');
           fetchUserOrders();
         }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    channelRef.current = channel;
   };
 
   const filterOrders = () => {

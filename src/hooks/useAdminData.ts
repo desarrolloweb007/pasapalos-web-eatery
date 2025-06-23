@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -52,6 +51,8 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const ordersChannelRef = useRef<any>(null);
+  const productsChannelRef = useRef<any>(null);
 
   const fetchOrders = useCallback(async () => {
     if (!userId || !isAuthenticated) return;
@@ -167,12 +168,18 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
     initializeData();
   }, [initializeData]);
 
-  // Set up realtime subscription for orders
+  // Set up realtime subscription for orders with proper cleanup
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    // Clean up existing channel
+    if (ordersChannelRef.current) {
+      supabase.removeChannel(ordersChannelRef.current);
+      ordersChannelRef.current = null;
+    }
+
     const channel = supabase
-      .channel('orders-changes')
+      .channel('admin-orders-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'orders' }, 
         () => {
@@ -182,17 +189,28 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
       )
       .subscribe();
 
+    ordersChannelRef.current = channel;
+
     return () => {
-      supabase.removeChannel(channel);
+      if (ordersChannelRef.current) {
+        supabase.removeChannel(ordersChannelRef.current);
+        ordersChannelRef.current = null;
+      }
     };
   }, [isAuthenticated, fetchOrders]);
 
-  // Set up realtime subscription for products
+  // Set up realtime subscription for products with proper cleanup
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    // Clean up existing channel
+    if (productsChannelRef.current) {
+      supabase.removeChannel(productsChannelRef.current);
+      productsChannelRef.current = null;
+    }
+
     const channel = supabase
-      .channel('products-changes')
+      .channel('admin-products-changes')
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'products' }, 
         () => {
@@ -202,8 +220,13 @@ export const useAdminData = (userId: string | undefined, isAuthenticated: boolea
       )
       .subscribe();
 
+    productsChannelRef.current = channel;
+
     return () => {
-      supabase.removeChannel(channel);
+      if (productsChannelRef.current) {
+        supabase.removeChannel(productsChannelRef.current);
+        productsChannelRef.current = null;
+      }
     };
   }, [isAuthenticated, fetchProducts]);
 
