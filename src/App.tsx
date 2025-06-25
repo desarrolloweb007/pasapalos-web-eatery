@@ -14,6 +14,7 @@ import Menu from "./pages/Menu";
 import Auth from "./pages/Auth";
 import AdminDashboard from "./pages/AdminDashboard";
 import UserDashboard from "./pages/UserDashboard";
+import CocineroPanel from "./pages/CocineroPanel";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,9 +57,7 @@ const App = () => (
                 path="/cocinero" 
                 element={
                   <ProtectedRoute allowedRoles={['cocinero']}>
-                    <div className="min-h-screen flex items-center justify-center">
-                      <h1 className="text-2xl font-bold">Panel del Cocinero - En construcción</h1>
-                    </div>
+                    <CocineroPanel />
                   </ProtectedRoute>
                 } 
               />
